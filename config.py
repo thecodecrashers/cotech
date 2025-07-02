@@ -10,6 +10,8 @@ config = {
 
     "device": "cuda" if __import__('torch').cuda.is_available() else "cpu",  # 所有模型/训练通用
     "batch_size": 1,                 # DataLoader 的 batch_size（train.py, fine_tune.py 使用）
+    "accum_iter": 4,     # 每累计4个batch更新一次权重（适用于显存不够的情况）
+    "use_amp": True,     # 启用混合精度训练（FP16）
 
     # ====================📂 路径设置（各文件夹中调用） ====================
     "train_img_dir": r"C:\Users\86178\Desktop\小可智能\裂纹\my_patches",  # 训练图像路径（train.py, fine_tune.py）

@@ -7,7 +7,9 @@ from models.registry import get_model
 from utils.dataset import SegmentationDataset
 from config import config
 from losses.combo_loss import build_loss_fn
-from tqdm import tqdm  # 进度条
+from tqdm import tqdm
+
+from torch.cuda.amp import autocast, GradScaler  # AMP支持
 
 def save_checkpoint(model, optimizer, epoch, best_loss, path):
     torch.save({
@@ -38,35 +40,28 @@ def train():
     os.makedirs(os.path.dirname(config["save_path"]), exist_ok=True)
     os.makedirs(os.path.dirname(config["log_csv"]), exist_ok=True)
 
-    # ===== 模型加载 =====
-    model = get_model(
-        config["model_name"],
-        in_channels=config["in_channels"],
-        out_channels=config["out_channels"]
-    ).to(config["device"])
+    model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(config["device"])
 
-    # ===== 数据加载 =====
-    train_set = SegmentationDataset(
-        config["train_img_dir"], config["train_mask_dir"],
-        image_size=config["input_size"], augment=True
-    )
+    train_set = SegmentationDataset(config["train_img_dir"], config["train_mask_dir"], config["input_size"], augment=True)
     train_loader = DataLoader(train_set, batch_size=config["batch_size"], shuffle=True)
 
     do_validation = os.path.exists(config["val_img_dir"]) and len(os.listdir(config["val_img_dir"])) > 0
     if do_validation:
-        val_set = SegmentationDataset(
-            config["val_img_dir"], config["val_mask_dir"],
-            image_size=config["input_size"], augment=False
-        )
+        val_set = SegmentationDataset(config["val_img_dir"], config["val_mask_dir"], config["input_size"], augment=False)
         val_loader = DataLoader(val_set, batch_size=1)
     else:
         print("⚠️ 没有找到验证集，跳过验证阶段")
 
-    # ===== 优化器 & 损失函数 =====
     optimizer = optim.Adam(model.parameters(), lr=config["lr"])
     criterion = build_loss_fn(config)
 
-    # ===== 判断是否恢复训练 =====
+    use_amp = config.get("use_amp", False)
+    accum_iter = config.get("accum_iter", 1)
+    scaler = GradScaler(enabled=use_amp)
+
+    warmup_epochs = int(config["epochs"] * 0.2)
+    warmup_factor = config.get("warmup_factor", 0.1)  # 默认起始学习率为原来的10%
+
     start_epoch = 0
     best_loss = float("inf")
     if os.path.exists(config["checkpoint_path"]):
@@ -74,21 +69,37 @@ def train():
     else:
         print("⚙️ 未检测到断点文件，使用随机初始化参数")
 
-    # ===== 正式训练 =====
     for epoch in range(start_epoch, config["epochs"]):
         model.train()
         train_loss = 0
-        train_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{config['epochs']} - Train", leave=False)
-        for imgs, masks in train_bar:
-            imgs, masks = imgs.to(config["device"]), masks.to(config["device"])
-            preds = model(imgs)
-            loss = criterion(preds, masks)
+        optimizer.zero_grad()
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            train_loss += loss.item()
-            train_bar.set_postfix(loss=loss.item())
+        # Warmup 逻辑
+        if epoch < warmup_epochs:
+            alpha = epoch / warmup_epochs
+            warmup_lr = config["lr"] * (warmup_factor + (1 - warmup_factor) * alpha)
+            optimizer.param_groups[0]["lr"] = warmup_lr
+            print(f"🚀 Warmup Epoch {epoch+1}/{warmup_epochs} | lr={warmup_lr:.6f}")
+        else:
+            optimizer.param_groups[0]["lr"] = config["lr"]
+
+        train_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}/{config['epochs']} - Train", leave=False)
+        for step, (imgs, masks) in train_bar:
+            imgs, masks = imgs.to(config["device"]), masks.to(config["device"])
+
+            with autocast(enabled=use_amp):
+                preds = model(imgs)
+                loss = criterion(preds, masks) / accum_iter
+
+            scaler.scale(loss).backward()
+
+            if (step + 1) % accum_iter == 0 or (step + 1) == len(train_loader):
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
+
+            train_loss += loss.item() * accum_iter
+            train_bar.set_postfix(loss=loss.item() * accum_iter)
 
         avg_train = train_loss / len(train_loader)
 
@@ -101,23 +112,24 @@ def train():
             with torch.no_grad():
                 for imgs, masks in val_bar:
                     imgs, masks = imgs.to(config["device"]), masks.to(config["device"])
-                    preds = model(imgs)
-                    loss = criterion(preds, masks)
+                    with autocast(enabled=use_amp):
+                        preds = model(imgs)
+                        loss = criterion(preds, masks)
                     val_loss += loss.item()
                     val_bar.set_postfix(loss=loss.item())
             avg_val = val_loss / len(val_loader)
-            print(f"[Epoch {epoch+1}/{config['epochs']}] Train Loss: {avg_train:.4f}  Val Loss: {avg_val:.4f}")
+            print(f"[Epoch {epoch+1}] Train Loss: {avg_train:.4f} | Val Loss: {avg_val:.4f}")
 
             if avg_val < best_loss:
                 torch.save(model.state_dict(), config["save_path"])
                 best_loss = avg_val
                 print(f"✅ Best model updated: {config['save_path']}")
         else:
-            print(f"[Epoch {epoch+1}/{config['epochs']}] Train Loss: {avg_train:.4f}")
+            print(f"[Epoch {epoch+1}] Train Loss: {avg_train:.4f}")
 
-        # ===== 保存 checkpoint 和记录 loss =====
         save_checkpoint(model, optimizer, epoch, best_loss, path=config["checkpoint_path"])
-        append_loss_log(epoch, avg_train, avg_val,path=config["log_csv"])
+        append_loss_log(epoch, avg_train, avg_val, path=config["log_csv"])
+
 
 if __name__ == "__main__":
     train()
