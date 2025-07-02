@@ -5,6 +5,12 @@ import torchvision.transforms.functional as TF
 import random
 import torch
 
+# 支持的图像扩展名（大写、小写都支持）
+IMG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".ico")
+
+def is_image_file(filename):
+    return filename.lower().endswith(IMG_EXTENSIONS)
+
 class SegmentationDataset(Dataset):
     def __init__(self, image_dir, mask_dir, image_size=(512, 512), augment=False):
         self.image_dir = image_dir
@@ -12,36 +18,46 @@ class SegmentationDataset(Dataset):
         self.image_size = image_size
         self.augment = augment
 
+        # 支持所有合法图像文件
         self.image_names = sorted([
             f for f in os.listdir(image_dir)
-            if f.endswith((".jpg", ".png", ".bmp"))
+            if is_image_file(f)
         ])
+
+        # 用于查找掩码路径（同名不同后缀也支持）
+        self.mask_files = {os.path.splitext(f)[0]: f for f in os.listdir(mask_dir)}
 
     def __len__(self):
         return len(self.image_names)
 
     def __getitem__(self, idx):
-        img_path = os.path.join(self.image_dir, self.image_names[idx])
-        mask_path = os.path.join(self.mask_dir, self.image_names[idx])
+        image_file = self.image_names[idx]
+        basename = os.path.splitext(image_file)[0]
 
-        # 加载图像和mask
-        img = Image.open(img_path).convert("L")      # 输入灰度图
-        mask = Image.open(mask_path).convert("L")    # 假设像素值 = 类别id
+        img_path = os.path.join(self.image_dir, image_file)
 
-        # 统一尺寸
+        if basename not in self.mask_files:
+            raise FileNotFoundError(f"❌ 找不到对应掩码：{basename}.* in {self.mask_dir}")
+
+        mask_path = os.path.join(self.mask_dir, self.mask_files[basename])
+
+        # 加载图像和掩码
+        img = Image.open(img_path).convert("L")       # 灰度图像
+        mask = Image.open(mask_path).convert("L")     # 像素值为类别ID
+
+        # 调整尺寸
         img = img.resize(self.image_size, resample=Image.BILINEAR)
-        mask = mask.resize(self.image_size, resample=Image.NEAREST)  # 注意！类别图必须用最近邻
+        mask = mask.resize(self.image_size, resample=Image.NEAREST)  # 保证整数类别不变
 
-        # 数据增强（随机水平翻转）
+        # 数据增强（可选）
         if self.augment and random.random() > 0.5:
             img = TF.hflip(img)
             mask = TF.hflip(mask)
 
         # 转为 Tensor
-        img = TF.to_tensor(img)                      # shape: [1, H, W], float32
-        mask = torch.from_numpy(
-            (TF.pil_to_tensor(mask)).numpy().squeeze(0).astype("int64")
-        )  # shape: [H, W], long
+        img_tensor = TF.to_tensor(img)  # shape: [1, H, W]
+        mask_tensor = torch.as_tensor(TF.pil_to_tensor(mask).squeeze(0), dtype=torch.long)  # shape: [H, W]
 
-        return img, mask
+        return img_tensor, mask_tensor
+
 

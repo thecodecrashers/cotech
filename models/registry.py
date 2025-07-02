@@ -1,9 +1,11 @@
 # models/registry.py
 
 from models.unet import UNet
+from models.segformer import SegFormer
 
 MODEL_REGISTRY = {
     "unet": UNet,
+    "segformer":SegFormer,
     # 之后添加： "deeplabv3": DeepLabV3(), "segformer": SegFormer()
 }
 
