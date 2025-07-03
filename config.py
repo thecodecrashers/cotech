@@ -25,7 +25,7 @@ config = {
 
     "save_path": r"C:\Users\86178\Desktop\小可智能\项目\checkpoint/best.pth",         # 最优模型保存路径（train.py）
     "checkpoint_path": r"C:\Users\86178\Desktop\小可智能\项目\checkpoint/checkpoint.pth", # 中断点模型保存路径（train.py）
-    "log_csv": r"C:\Users\86178\Desktop\小可智能\项目\logs",                         # 训练损失日志路径（train.py）
+    "log_csv": r"C:\Users\86178\Desktop\小可智能\项目\logs/loss_log.csv",                         # 训练损失日志路径（train.py）
     "val_vis_dir": "val_vis",     # 可视化输出路径（validate.py）
 
     # ====================🧠 学习率与 epoch 配置（train.py / fine_tune.py） ====================

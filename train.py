@@ -9,8 +9,17 @@ from config import config
 from losses.combo_loss import build_loss_fn
 from tqdm import tqdm
 
-from torch.cuda.amp import autocast, GradScaler  # AMP支持
-from utils.metrics import dice_coef, iou_score, precision, recall, f1_score, accuracy, specificity
+from torch.cuda.amp import autocast, GradScaler
+from utils.metrics import pixel_accuracy, mean_iou
+
+
+def align_prediction_size(preds, masks):
+    if preds.ndim == 4 and masks.ndim == 3:
+        if preds.shape[2:] != masks.shape[1:]:
+            preds = nn.functional.interpolate(preds, size=masks.shape[1:], mode="bilinear", align_corners=False)
+    else:
+        raise ValueError(f"Unsupported tensor shape: preds={preds.shape}, masks={masks.shape}")
+    return preds
 
 
 def save_checkpoint(model, optimizer, epoch, best_loss, path):
@@ -21,6 +30,7 @@ def save_checkpoint(model, optimizer, epoch, best_loss, path):
         "best_loss": best_loss,
     }, path)
 
+
 def load_checkpoint(model, optimizer, path):
     checkpoint = torch.load(path, map_location=config["device"])
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -30,6 +40,7 @@ def load_checkpoint(model, optimizer, path):
     print(f"📦 恢复训练：从 Epoch {epoch+1} 开始")
     return epoch, best_loss
 
+
 def append_loss_log(epoch, train_loss, val_loss=None, path=config["log_csv"]):
     write_header = not os.path.exists(path)
     with open(path, "a", newline="") as f:
@@ -37,40 +48,30 @@ def append_loss_log(epoch, train_loss, val_loss=None, path=config["log_csv"]):
         if write_header:
             writer.writerow(["epoch", "train_loss", "val_loss"])
         writer.writerow([epoch+1, train_loss, val_loss if val_loss is not None else ""])
-        
+
+
 def test():
     print("🧪 正在进行测试集评估...")
-
-    # ========== 加载模型 ==========
     model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(config["device"])
     model.load_state_dict(torch.load(config["save_path"], map_location=config["device"]))
     model.eval()
 
-    # ========== 加载测试集 ==========
     test_set = SegmentationDataset(config["test_img_dir"], config["test_mask_dir"], config["input_size"], augment=False)
     test_loader = DataLoader(test_set, batch_size=1)
 
-    dice_total, iou_total = 0, 0
-    precision_total, recall_total, f1_total = 0, 0, 0
-    acc_total, spec_total = 0, 0
-
+    acc_total, miou_total = 0, 0
     with torch.no_grad():
         test_bar = tqdm(test_loader, desc="Testing", leave=False)
         for imgs, masks in test_bar:
             imgs, masks = imgs.to(config["device"]), masks.to(config["device"])
             preds = model(imgs)
-            dice_total      += dice_coef(preds, masks).item()
-            iou_total       += iou_score(preds, masks).item()
-            precision_total += precision(preds, masks).item()
-            recall_total    += recall(preds, masks).item()
-            f1_total        += f1_score(preds, masks).item()
-            acc_total       += accuracy(preds, masks).item()
-            spec_total      += specificity(preds, masks).item()
+            preds = align_prediction_size(preds, masks)
+
+            acc_total += pixel_accuracy(preds, masks).item()
+            miou_total += mean_iou(preds, masks, num_classes=config["out_channels"]).item()
 
     n = len(test_loader)
-    print("📌 测试集评估结果：")
-    print(f"📊 Dice: {dice_total/n:.4f} | IoU: {iou_total/n:.4f} | Precision: {precision_total/n:.4f} | Recall: {recall_total/n:.4f}")
-    print(f"📊 F1: {f1_total/n:.4f} | Accuracy: {acc_total/n:.4f} | Specificity: {spec_total/n:.4f}")
+    print(f"📈 测试结果: Pixel Acc: {acc_total/n:.4f} | mIoU: {miou_total/n:.4f}")
 
 
 def train():
@@ -78,7 +79,6 @@ def train():
     os.makedirs(os.path.dirname(config["log_csv"]), exist_ok=True)
 
     model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(config["device"])
-
     train_set = SegmentationDataset(config["train_img_dir"], config["train_mask_dir"], config["input_size"], augment=True)
     train_loader = DataLoader(train_set, batch_size=config["batch_size"], shuffle=True)
 
@@ -97,7 +97,7 @@ def train():
     scaler = GradScaler(enabled=use_amp)
 
     warmup_epochs = int(config["epochs"] * 0.2)
-    warmup_factor = config.get("warmup_factor", 0.1)  # 默认起始学习率为原来的10%
+    warmup_factor = config.get("warmup_factor", 0.1)
 
     start_epoch = 0
     best_loss = float("inf")
@@ -111,7 +111,6 @@ def train():
         train_loss = 0
         optimizer.zero_grad()
 
-        # Warmup 逻辑
         if epoch < warmup_epochs:
             alpha = epoch / warmup_epochs
             warmup_lr = config["lr"] * (warmup_factor + (1 - warmup_factor) * alpha)
@@ -145,9 +144,7 @@ def train():
         if do_validation:
             model.eval()
             val_loss = 0
-            dice_total, iou_total = 0, 0
-            precision_total, recall_total, f1_total = 0, 0, 0
-            acc_total, spec_total = 0, 0
+            acc_total, miou_total = 0, 0
 
             val_bar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{config['epochs']} - Val", leave=False)
             with torch.no_grad():
@@ -160,26 +157,14 @@ def train():
                     val_loss += loss.item()
                     val_bar.set_postfix(loss=loss.item())
 
-                    # === 计算评价指标 ===
-                    dice_total      += dice_coef(preds, masks).item()
-                    iou_total       += iou_score(preds, masks).item()
-                    precision_total += precision(preds, masks).item()
-                    recall_total    += recall(preds, masks).item()
-                    f1_total        += f1_score(preds, masks).item()
-                    acc_total       += accuracy(preds, masks).item()
-                    spec_total      += specificity(preds, masks).item()
+                    preds = align_prediction_size(preds, masks)
+                    acc_total += pixel_accuracy(preds, masks).item()
+                    miou_total += mean_iou(preds, masks, num_classes=config["out_channels"]).item()
 
             avg_val = val_loss / len(val_loader)
             n = len(val_loader)
             print(f"[Epoch {epoch+1}] Train Loss: {avg_train:.4f} | Val Loss: {avg_val:.4f}")
-            print(f"📊 Dice: {dice_total/n:.4f} | IoU: {iou_total/n:.4f} | Precision: {precision_total/n:.4f} | Recall: {recall_total/n:.4f}")
-            print(f"📊 F1: {f1_total/n:.4f} | Accuracy: {acc_total/n:.4f} | Specificity: {spec_total/n:.4f}")
-
-            if avg_val < best_loss:
-                torch.save(model.state_dict(), config["save_path"])
-                best_loss = avg_val
-                print(f"✅ Best model updated: {config['save_path']}")
-
+            print(f"📊 Pixel Acc: {acc_total/n:.4f} | mIoU: {miou_total/n:.4f}")
 
             if avg_val < best_loss:
                 torch.save(model.state_dict(), config["save_path"])
@@ -198,3 +183,4 @@ if __name__ == "__main__":
         test()
     else:
         print("⚠️ 未检测到测试集目录，跳过测试阶段")
+

@@ -1,6 +1,7 @@
 import torch
 import time
 
+# === 二分类指标 ===
 def flatten_probs(preds, targets, threshold=0.5):
     probs = torch.sigmoid(preds)
     preds_bin = (probs > threshold).float()
@@ -45,12 +46,30 @@ def specificity(preds, targets, threshold=0.5, smooth=1e-6):
     fp = (pred * (1 - target)).sum()
     return (tn + smooth) / (tn + fp + smooth)
 
-# === 语义分割专用指标 ===
+# === 多分类语义分割指标 ===
+def pixel_accuracy(preds, targets):
+    preds = torch.argmax(preds, dim=1)
+    correct = (preds == targets).float()
+    return correct.sum() / correct.numel()
+
+def mean_iou(preds, targets, num_classes, ignore_index=None):
+    preds = torch.argmax(preds, dim=1)
+    ious = []
+    for cls in range(num_classes):
+        if ignore_index is not None and cls == ignore_index:
+            continue
+        pred_inds = (preds == cls)
+        target_inds = (targets == cls)
+        intersection = (pred_inds & target_inds).sum().float()
+        union = (pred_inds | target_inds).sum().float()
+        if union == 0:
+            iou = torch.tensor(1.0)
+        else:
+            iou = intersection / union
+        ious.append(iou)
+    return torch.stack(ious).mean()
 
 def mean_iou_per_class(conf_matrix):
-    """
-    多类语义分割用：每类IoU平均
-    """
     class_iou = []
     for i in range(conf_matrix.shape[0]):
         TP = conf_matrix[i, i]
@@ -61,16 +80,10 @@ def mean_iou_per_class(conf_matrix):
         class_iou.append(iou)
     return sum(class_iou) / len(class_iou)
 
-def pixel_accuracy(conf_matrix):
-    """
-    所有像素预测对了的比例
-    """
+def pixel_accuracy_confmat(conf_matrix):
     return torch.diag(conf_matrix).sum() / conf_matrix.sum()
 
 def class_accuracy(conf_matrix):
-    """
-    每类 Recall（TP / (TP + FN)）
-    """
     recall_list = []
     for i in range(conf_matrix.shape[0]):
         TP = conf_matrix[i, i]
@@ -80,12 +93,8 @@ def class_accuracy(conf_matrix):
         recall_list.append(recall)
     return recall_list
 
-# === 推理速度与模型大小 ===
-
+# === 模型推理性能指标 ===
 def measure_inference_speed(model, input_size=(1, 1, 512, 512), device="cuda", warmup=10, runs=50):
-    """
-    测试推理速度（ms/img）
-    """
     model.eval()
     dummy_input = torch.randn(*input_size).to(device)
     with torch.no_grad():
@@ -97,13 +106,10 @@ def measure_inference_speed(model, input_size=(1, 1, 512, 512), device="cuda", w
             _ = model(dummy_input)
         torch.cuda.synchronize()
         end = time.time()
-    avg_time = (end - start) / runs * 1000  # ms
+    avg_time = (end - start) / runs * 1000
     return avg_time
 
 def measure_model_size(model):
-    """
-    测试模型内存占用（MB）
-    """
     param_size = sum(p.numel() * p.element_size() for p in model.parameters())
     buffer_size = sum(b.numel() * b.element_size() for b in model.buffers())
     size_mb = (param_size + buffer_size) / 1024**2

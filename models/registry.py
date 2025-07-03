@@ -9,8 +9,10 @@ MODEL_REGISTRY = {
     # 之后添加： "deeplabv3": DeepLabV3(), "segformer": SegFormer()
 }
 
-def get_model(name, **kwargs):
-    name = name.lower()
-    if name not in MODEL_REGISTRY:
-        raise ValueError(f"模型 '{name}' 未注册！可用模型：{list(MODEL_REGISTRY.keys())}")
-    return MODEL_REGISTRY[name](**kwargs)
+def get_model(name, in_channels=1, out_channels=1):
+    if name == "unet":
+        return UNet(in_channels=in_channels, out_channels=out_channels)
+    elif name == "segformer":
+        return SegFormer(in_channels=in_channels, out_channels=out_channels)
+    else:
+        raise ValueError(f"Unknown model: {name}")
