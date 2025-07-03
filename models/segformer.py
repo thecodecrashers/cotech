@@ -1,25 +1,25 @@
+# ✅ 完整 SegFormer-B0 实现（多尺度 + Transformer + 拼接融合）
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-# === OverlapPatchEmbed ===
+# === OverlapPatchEmbedding ===
 class OverlapPatchEmbed(nn.Module):
-    def __init__(self, in_ch, embed_dim=32, patch_size=7, stride=4):
+    def __init__(self, in_ch, embed_dim, patch_size=7, stride=4):
         super().__init__()
-        self.proj = nn.Conv2d(in_ch, embed_dim, patch_size, stride, patch_size//2)
+        self.proj = nn.Conv2d(in_ch, embed_dim, kernel_size=patch_size, stride=stride, padding=patch_size//2)
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
-        B,C,H,W = x.shape
-        x = self.proj(x)
-        _, C, H, W = x.shape
+        x = self.proj(x)  # [B, C, H, W]
+        B, C, H, W = x.shape
         x = rearrange(x, 'b c h w -> b (h w) c')
         x = self.norm(x)
         x = rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
         return x
 
-# === Transformer Encoder Block ===
+# === Transformer Block ===
 class MixTransformerBlock(nn.Module):
     def __init__(self, dim, num_heads=1, mlp_ratio=4.0):
         super().__init__()
@@ -46,34 +46,65 @@ class MixTransformerBlock(nn.Module):
 class MiT_B0(nn.Module):
     def __init__(self, in_ch):
         super().__init__()
-        self.stage1 = OverlapPatchEmbed(in_ch, 32, 7, 4)
-        self.block1 = nn.Sequential(*[MixTransformerBlock(32, num_heads=1) for _ in range(2)])
-        # [可扩展更多stage，MiT-B0 默认4stage略简略]
+        self.stage1 = nn.Sequential(
+            OverlapPatchEmbed(in_ch, 32, 7, 4),
+            *[MixTransformerBlock(32, 1) for _ in range(2)]
+        )
+        self.stage2 = nn.Sequential(
+            OverlapPatchEmbed(32, 64, 3, 2),
+            *[MixTransformerBlock(64, 2) for _ in range(2)]
+        )
+        self.stage3 = nn.Sequential(
+            OverlapPatchEmbed(64, 160, 3, 2),
+            *[MixTransformerBlock(160, 4) for _ in range(2)]
+        )
+        self.stage4 = nn.Sequential(
+            OverlapPatchEmbed(160, 256, 3, 2),
+            *[MixTransformerBlock(256, 5) for _ in range(2)]
+        )
 
     def forward(self, x):
-        x = self.stage1(x)
-        x = self.block1(x)
-        return x
+        x1 = self.stage1(x)  # 1/4
+        x2 = self.stage2(x1) # 1/8
+        x3 = self.stage3(x2) # 1/16
+        x4 = self.stage4(x3) # 1/32
+        return x1, x2, x3, x4
 
 # === Decode Head ===
 class SegFormerHead(nn.Module):
-    def __init__(self, in_ch, num_classes):
+    def __init__(self, dims=[32,64,160,256], embed_dim=256, num_classes=1):
         super().__init__()
-        self.linear = nn.Conv2d(in_ch, num_classes, kernel_size=1)
+        self.linear_c = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(dim, embed_dim, 1),
+                nn.BatchNorm2d(embed_dim),
+                nn.ReLU(inplace=True)
+            ) for dim in dims
+        ])
+        self.fuse = nn.Sequential(
+            nn.Conv2d(embed_dim*4, embed_dim, 1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(embed_dim, num_classes, 1)
+        )
 
-    def forward(self, x, target_size):
-        x = self.linear(x)
-        return F.interpolate(x, size=target_size, mode='bilinear', align_corners=False)
+    def forward(self, feats, target_size):
+        upsampled = []
+        for i, feat in enumerate(feats):
+            x = self.linear_c[i](feat)
+            x = F.interpolate(x, size=target_size, mode='bilinear', align_corners=False)
+            upsampled.append(x)
+        x = torch.cat(upsampled, dim=1)
+        return self.fuse(x)
 
-# === 完整 SegFormer-B0 ===
+# === SegFormer-B0 完整模型 ===
 class SegFormer(nn.Module):
-    def __init__(self, in_channels=1, out_channels=2):
+    def __init__(self, in_channels=1, out_channels=1):
         super().__init__()
         self.backbone = MiT_B0(in_channels)
-        self.decode_head = SegFormerHead(32, out_channels)
+        self.decode_head = SegFormerHead([32,64,160,256], embed_dim=256, num_classes=out_channels)
 
     def forward(self, x):
         H,W = x.shape[2:]
-        x = self.backbone(x)
-        x = self.decode_head(x, (H, W))
-        return x
+        feats = self.backbone(x)
+        out = self.decode_head(feats, (H, W))
+        return out
