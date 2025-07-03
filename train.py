@@ -37,6 +37,41 @@ def append_loss_log(epoch, train_loss, val_loss=None, path=config["log_csv"]):
         if write_header:
             writer.writerow(["epoch", "train_loss", "val_loss"])
         writer.writerow([epoch+1, train_loss, val_loss if val_loss is not None else ""])
+        
+def test():
+    print("🧪 正在进行测试集评估...")
+
+    # ========== 加载模型 ==========
+    model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(config["device"])
+    model.load_state_dict(torch.load(config["save_path"], map_location=config["device"]))
+    model.eval()
+
+    # ========== 加载测试集 ==========
+    test_set = SegmentationDataset(config["test_img_dir"], config["test_mask_dir"], config["input_size"], augment=False)
+    test_loader = DataLoader(test_set, batch_size=1)
+
+    dice_total, iou_total = 0, 0
+    precision_total, recall_total, f1_total = 0, 0, 0
+    acc_total, spec_total = 0, 0
+
+    with torch.no_grad():
+        test_bar = tqdm(test_loader, desc="Testing", leave=False)
+        for imgs, masks in test_bar:
+            imgs, masks = imgs.to(config["device"]), masks.to(config["device"])
+            preds = model(imgs)
+            dice_total      += dice_coef(preds, masks).item()
+            iou_total       += iou_score(preds, masks).item()
+            precision_total += precision(preds, masks).item()
+            recall_total    += recall(preds, masks).item()
+            f1_total        += f1_score(preds, masks).item()
+            acc_total       += accuracy(preds, masks).item()
+            spec_total      += specificity(preds, masks).item()
+
+    n = len(test_loader)
+    print("📌 测试集评估结果：")
+    print(f"📊 Dice: {dice_total/n:.4f} | IoU: {iou_total/n:.4f} | Precision: {precision_total/n:.4f} | Recall: {recall_total/n:.4f}")
+    print(f"📊 F1: {f1_total/n:.4f} | Accuracy: {acc_total/n:.4f} | Specificity: {spec_total/n:.4f}")
+
 
 def train():
     os.makedirs(os.path.dirname(config["save_path"]), exist_ok=True)
@@ -159,3 +194,7 @@ def train():
 
 if __name__ == "__main__":
     train()
+    if os.path.exists(config["test_img_dir"]) and os.path.exists(config["test_mask_dir"]):
+        test()
+    else:
+        print("⚠️ 未检测到测试集目录，跳过测试阶段")

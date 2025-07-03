@@ -19,6 +19,9 @@ config = {
 
     "val_img_dir": r"C:\Users\86178\Desktop\小可智能\裂纹\my_patches",    # 验证图像路径（train.py）
     "val_mask_dir": r"C:\Users\86178\Desktop\小可智能\裂纹\my_masks",     # 验证掩码路径
+    
+    "test_img_dir": "path/to/test/images",#测试数据集位置
+    "test_mask_dir": "path/to/test/masks",
 
     "save_path": r"C:\Users\86178\Desktop\小可智能\项目\checkpoint/best.pth",         # 最优模型保存路径（train.py）
     "checkpoint_path": r"C:\Users\86178\Desktop\小可智能\项目\checkpoint/checkpoint.pth", # 中断点模型保存路径（train.py）
