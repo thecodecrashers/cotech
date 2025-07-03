@@ -10,6 +10,8 @@ from losses.combo_loss import build_loss_fn
 from tqdm import tqdm
 
 from torch.cuda.amp import autocast, GradScaler  # AMP支持
+from utils.metrics import dice_coef, iou_score, precision, recall, f1_score, accuracy, specificity
+
 
 def save_checkpoint(model, optimizer, epoch, best_loss, path):
     torch.save({
@@ -108,6 +110,10 @@ def train():
         if do_validation:
             model.eval()
             val_loss = 0
+            dice_total, iou_total = 0, 0
+            precision_total, recall_total, f1_total = 0, 0, 0
+            acc_total, spec_total = 0, 0
+
             val_bar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{config['epochs']} - Val", leave=False)
             with torch.no_grad():
                 for imgs, masks in val_bar:
@@ -115,10 +121,30 @@ def train():
                     with autocast(enabled=use_amp):
                         preds = model(imgs)
                         loss = criterion(preds, masks)
+
                     val_loss += loss.item()
                     val_bar.set_postfix(loss=loss.item())
+
+                    # === 计算评价指标 ===
+                    dice_total      += dice_coef(preds, masks).item()
+                    iou_total       += iou_score(preds, masks).item()
+                    precision_total += precision(preds, masks).item()
+                    recall_total    += recall(preds, masks).item()
+                    f1_total        += f1_score(preds, masks).item()
+                    acc_total       += accuracy(preds, masks).item()
+                    spec_total      += specificity(preds, masks).item()
+
             avg_val = val_loss / len(val_loader)
+            n = len(val_loader)
             print(f"[Epoch {epoch+1}] Train Loss: {avg_train:.4f} | Val Loss: {avg_val:.4f}")
+            print(f"📊 Dice: {dice_total/n:.4f} | IoU: {iou_total/n:.4f} | Precision: {precision_total/n:.4f} | Recall: {recall_total/n:.4f}")
+            print(f"📊 F1: {f1_total/n:.4f} | Accuracy: {acc_total/n:.4f} | Specificity: {spec_total/n:.4f}")
+
+            if avg_val < best_loss:
+                torch.save(model.state_dict(), config["save_path"])
+                best_loss = avg_val
+                print(f"✅ Best model updated: {config['save_path']}")
+
 
             if avg_val < best_loss:
                 torch.save(model.state_dict(), config["save_path"])
