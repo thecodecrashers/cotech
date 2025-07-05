@@ -23,7 +23,7 @@ config = {
     "test_img_dir": "path/to/test/images",#测试数据集位置
     "test_mask_dir": "path/to/test/masks",
 
-    "save_path": r"C:\Users\86178\Desktop\小可智能\项目\checkpoint/best.pth",         # 最优模型保存路径（train.py）
+    "save_path": r"C:\Users\86178\Desktop\小可智能\焊点 20250630\save_file\checkpoint/best_Unet.pth",         # 最优模型保存路径（train.py）
     "checkpoint_path": r"C:\Users\86178\Desktop\小可智能\项目\checkpoint/checkpoint.pth", # 中断点模型保存路径（train.py）
     "log_csv": r"C:\Users\86178\Desktop\小可智能\项目\logs/loss_log.csv",                         # 训练损失日志路径（train.py）
     "val_vis_dir": "val_vis",     # 可视化输出路径（validate.py）

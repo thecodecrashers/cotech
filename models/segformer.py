@@ -1,10 +1,9 @@
-# ✅ 完整 SegFormer-B0 实现（多尺度 + Transformer + 拼接融合）
+# ✅ 升级版 SegFormer-B3（更深更宽 + 拼接融合）
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-# === OverlapPatchEmbedding ===
 class OverlapPatchEmbed(nn.Module):
     def __init__(self, in_ch, embed_dim, patch_size=7, stride=4):
         super().__init__()
@@ -12,14 +11,13 @@ class OverlapPatchEmbed(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
-        x = self.proj(x)  # [B, C, H, W]
+        x = self.proj(x)
         B, C, H, W = x.shape
         x = rearrange(x, 'b c h w -> b (h w) c')
         x = self.norm(x)
         x = rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
         return x
 
-# === Transformer Block ===
 class MixTransformerBlock(nn.Module):
     def __init__(self, dim, num_heads=1, mlp_ratio=4.0):
         super().__init__()
@@ -42,37 +40,35 @@ class MixTransformerBlock(nn.Module):
         x = x + self.mlp(x2)
         return rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
 
-# === MiT-B0 Backbone ===
-class MiT_B0(nn.Module):
+class MiT_B3(nn.Module):
     def __init__(self, in_ch):
         super().__init__()
         self.stage1 = nn.Sequential(
-            OverlapPatchEmbed(in_ch, 32, 7, 4),
-            *[MixTransformerBlock(32, 1) for _ in range(2)]
+            OverlapPatchEmbed(in_ch, 64, 7, 4),
+            *[MixTransformerBlock(64, 1) for _ in range(3)]
         )
         self.stage2 = nn.Sequential(
-            OverlapPatchEmbed(32, 64, 3, 2),
-            *[MixTransformerBlock(64, 2) for _ in range(2)]
+            OverlapPatchEmbed(64, 128, 3, 2),
+            *[MixTransformerBlock(128, 2) for _ in range(6)]
         )
         self.stage3 = nn.Sequential(
-            OverlapPatchEmbed(64, 160, 3, 2),
-            *[MixTransformerBlock(160, 4) for _ in range(2)]
+            OverlapPatchEmbed(128, 320, 3, 2),
+            *[MixTransformerBlock(320, 5) for _ in range(18)]
         )
         self.stage4 = nn.Sequential(
-            OverlapPatchEmbed(160, 256, 3, 2),
-            *[MixTransformerBlock(256, 5) for _ in range(2)]
+            OverlapPatchEmbed(320, 512, 3, 2),
+            *[MixTransformerBlock(512, 8) for _ in range(3)]
         )
 
     def forward(self, x):
-        x1 = self.stage1(x)  # 1/4
-        x2 = self.stage2(x1) # 1/8
-        x3 = self.stage3(x2) # 1/16
-        x4 = self.stage4(x3) # 1/32
+        x1 = self.stage1(x)
+        x2 = self.stage2(x1)
+        x3 = self.stage3(x2)
+        x4 = self.stage4(x3)
         return x1, x2, x3, x4
 
-# === Decode Head ===
 class SegFormerHead(nn.Module):
-    def __init__(self, dims=[32,64,160,256], embed_dim=256, num_classes=1):
+    def __init__(self, dims=[64,128,320,512], embed_dim=256, num_classes=1):
         super().__init__()
         self.linear_c = nn.ModuleList([
             nn.Sequential(
@@ -96,15 +92,126 @@ class SegFormerHead(nn.Module):
         x = torch.cat(upsampled, dim=1)
         return self.fuse(x)
 
-# === SegFormer-B0 完整模型 ===
 class SegFormer(nn.Module):
     def __init__(self, in_channels=1, out_channels=1):
         super().__init__()
-        self.backbone = MiT_B0(in_channels)
-        self.decode_head = SegFormerHead([32,64,160,256], embed_dim=256, num_classes=out_channels)
+        self.backbone = MiT_B3(in_channels)
+        self.decode_head = SegFormerHead([64,128,320,512], embed_dim=256, num_classes=out_channels)
 
     def forward(self, x):
         H,W = x.shape[2:]
         feats = self.backbone(x)
         out = self.decode_head(feats, (H, W))
         return out
+
+
+
+
+
+#B2版本SegFormer这个东西
+"""# ✅ 升级版 SegFormer-B2（更深更宽 + 拼接融合）
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from einops import rearrange
+
+class OverlapPatchEmbed(nn.Module):
+    def __init__(self, in_ch, embed_dim, patch_size=7, stride=4):
+        super().__init__()
+        self.proj = nn.Conv2d(in_ch, embed_dim, kernel_size=patch_size, stride=stride, padding=patch_size//2)
+        self.norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x):
+        x = self.proj(x)
+        B, C, H, W = x.shape
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        x = self.norm(x)
+        x = rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
+        return x
+
+class MixTransformerBlock(nn.Module):
+    def __init__(self, dim, num_heads=1, mlp_ratio=4.0):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn = nn.MultiheadAttention(dim, num_heads, batch_first=True)
+        self.norm2 = nn.LayerNorm(dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim, int(dim*mlp_ratio)),
+            nn.GELU(),
+            nn.Linear(int(dim*mlp_ratio), dim)
+        )
+
+    def forward(self, x):
+        B,C,H,W = x.shape
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        x1 = self.norm1(x)
+        attn_out,_ = self.attn(x1, x1, x1)
+        x = x + attn_out
+        x2 = self.norm2(x)
+        x = x + self.mlp(x2)
+        return rearrange(x, 'b (h w) c -> b c h w', h=H, w=W)
+
+class MiT_B2(nn.Module):
+    def __init__(self, in_ch):
+        super().__init__()
+        self.stage1 = nn.Sequential(
+            OverlapPatchEmbed(in_ch, 64, 7, 4),
+            *[MixTransformerBlock(64, 1) for _ in range(3)]
+        )
+        self.stage2 = nn.Sequential(
+            OverlapPatchEmbed(64, 128, 3, 2),
+            *[MixTransformerBlock(128, 2) for _ in range(4)]
+        )
+        self.stage3 = nn.Sequential(
+            OverlapPatchEmbed(128, 320, 3, 2),
+            *[MixTransformerBlock(320, 5) for _ in range(6)]
+        )
+        self.stage4 = nn.Sequential(
+            OverlapPatchEmbed(320, 512, 3, 2),
+            *[MixTransformerBlock(512, 8) for _ in range(3)]
+        )
+
+    def forward(self, x):
+        x1 = self.stage1(x)
+        x2 = self.stage2(x1)
+        x3 = self.stage3(x2)
+        x4 = self.stage4(x3)
+        return x1, x2, x3, x4
+
+class SegFormerHead(nn.Module):
+    def __init__(self, dims=[64,128,320,512], embed_dim=256, num_classes=1):
+        super().__init__()
+        self.linear_c = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(dim, embed_dim, 1),
+                nn.BatchNorm2d(embed_dim),
+                nn.ReLU(inplace=True)
+            ) for dim in dims
+        ])
+        self.fuse = nn.Sequential(
+            nn.Conv2d(embed_dim*4, embed_dim, 1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(embed_dim, num_classes, 1)
+        )
+
+    def forward(self, feats, target_size):
+        upsampled = []
+        for i, feat in enumerate(feats):
+            x = self.linear_c[i](feat)
+            x = F.interpolate(x, size=target_size, mode='bilinear', align_corners=False)
+            upsampled.append(x)
+        x = torch.cat(upsampled, dim=1)
+        return self.fuse(x)
+
+class SegFormer(nn.Module):
+    def __init__(self, in_channels=1, out_channels=1):
+        super().__init__()
+        self.backbone = MiT_B2(in_channels)
+        self.decode_head = SegFormerHead([64,128,320,512], embed_dim=256, num_classes=out_channels)
+
+    def forward(self, x):
+        H,W = x.shape[2:]
+        feats = self.backbone(x)
+        out = self.decode_head(feats, (H, W))
+        return out
+"""
