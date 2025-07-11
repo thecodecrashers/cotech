@@ -8,7 +8,7 @@ import torch
 from models.registry import get_model
 from config import config
 
-# 创建模型并加载权重
+# ===== 加载模型 =====
 model = get_model(
     config["model_name"],
     in_channels=config["in_channels"],
@@ -17,19 +17,22 @@ model = get_model(
 model.load_state_dict(torch.load(config["save_path"], map_location=config["device"]))
 model.eval()
 
-# 构造一个示例输入
-dummy_input = torch.randn(1, config["in_channels"], *config["input_size"]).to(config["device"])
+# ===== 注意：PyTorch 模型输入是 [N, C, H, W]，而 config["input_size"] 是 (W, H) =====
+width, height = config["input_size"]
+dummy_input = torch.randn(1, config["in_channels"], height, width).to(config["device"])
 
-# 导出 ONNX
+# ===== 导出 ONNX =====
+onnx_path = "model.onnx"
 torch.onnx.export(
     model,
     dummy_input,
-    "model.onnx",                        # 导出路径
+    onnx_path,
     input_names=["input"],
     output_names=["output"],
     dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
     opset_version=11
 )
 
-print("✅ ONNX模型导出完成：model.onnx")
+print(f"✅ ONNX模型导出完成：{onnx_path}")
+
 

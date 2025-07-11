@@ -5,7 +5,7 @@ config = {
     "model_name": "unet",            # 模型名称（供 registry.py 使用：可选 "unet", "segformer" 等）
     "in_channels": 1,                # 输入通道数（灰度图用1）
     "out_channels": num_classes,     # 输出类别数（2表示二分类掩码）
-    "input_size": (512, 512),        # 输入图像大小（供 dataset.py 使用）
+    "input_size": (500, 600),        # 输入图像大小（供 dataset.py 使用）
     "num_classes": num_classes,      # 类别总数（部分模型可能用到）
 
     "device": "cuda" if __import__('torch').cuda.is_available() else "cpu",  # 所有模型/训练通用
@@ -23,7 +23,7 @@ config = {
     "test_img_dir": "path/to/test/images",#测试数据集位置
     "test_mask_dir": "path/to/test/masks",
 
-    "save_path": r"C:\Users\86178\Desktop\小可智能\焊点 20250630\save_file\checkpoint/best_Unet.pth",         # 最优模型保存路径（train.py）
+    "save_path": r"C:\Users\86178\Desktop\小可智能\输出结果/best_Unet.pth",         # 最优模型保存路径（train.py）
     "checkpoint_path": r"C:\Users\86178\Desktop\小可智能\项目\checkpoint/checkpoint.pth", # 中断点模型保存路径（train.py）
     "log_csv": r"C:\Users\86178\Desktop\小可智能\项目\logs/loss_log.csv",                         # 训练损失日志路径（train.py）
     "val_vis_dir": "val_vis",     # 可视化输出路径（validate.py）

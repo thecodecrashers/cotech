@@ -5,11 +5,35 @@ import torchvision.transforms.functional as TF
 import random
 import torch
 
-# 支持的图像扩展名（大写、小写都支持）
 IMG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".ico")
 
 def is_image_file(filename):
     return filename.lower().endswith(IMG_EXTENSIONS)
+
+def pad_or_crop(img, target_size, is_mask=False):
+    """将图像强制处理为指定大小（先中心裁切，再 padding）"""
+    target_w, target_h = target_size
+    w, h = img.size
+
+    # === Step 1: 中心裁切（如果图像尺寸过大） ===
+    left = max((w - target_w) // 2, 0)
+    top = max((h - target_h) // 2, 0)
+    right = min(left + target_w, w)
+    bottom = min(top + target_h, h)
+
+    img = img.crop((left, top, right, bottom))
+
+    # === Step 2: padding（如果图像尺寸不足） ===
+    new_w, new_h = img.size
+    pad_left = max((target_w - new_w) // 2, 0)
+    pad_top = max((target_h - new_h) // 2, 0)
+    pad_right = target_w - new_w - pad_left
+    pad_bottom = target_h - new_h - pad_top
+
+    fill = 0 if is_mask else 0  # 背景填充为 0
+    img = TF.pad(img, padding=(pad_left, pad_top, pad_right, pad_bottom), fill=fill)
+
+    return img
 
 class SegmentationDataset(Dataset):
     def __init__(self, image_dir, mask_dir, image_size=(512, 512), augment=False):
@@ -18,13 +42,10 @@ class SegmentationDataset(Dataset):
         self.image_size = image_size
         self.augment = augment
 
-        # 支持所有合法图像文件
         self.image_names = sorted([
             f for f in os.listdir(image_dir)
             if is_image_file(f)
         ])
-
-        # 用于查找掩码路径（同名不同后缀也支持）
         self.mask_files = {os.path.splitext(f)[0]: f for f in os.listdir(mask_dir)}
 
     def __len__(self):
@@ -43,21 +64,22 @@ class SegmentationDataset(Dataset):
 
         # 加载图像和掩码
         img = Image.open(img_path).convert("L")       # 灰度图像
-        mask = Image.open(mask_path).convert("L")     # 像素值为类别ID
+        mask = Image.open(mask_path).convert("L")     # 掩码图（类别ID）
 
-        # 调整尺寸
-        img = img.resize(self.image_size, resample=Image.BILINEAR)
-        mask = mask.resize(self.image_size, resample=Image.NEAREST)  # 保证整数类别不变
+        # ⚠️ 使用裁切 + padding 处理尺寸
+        img = pad_or_crop(img, self.image_size, is_mask=False)
+        mask = pad_or_crop(mask, self.image_size, is_mask=True)
 
-        # 数据增强（可选）
+        # 数据增强（随机水平翻转）
         if self.augment and random.random() > 0.5:
             img = TF.hflip(img)
             mask = TF.hflip(mask)
 
         # 转为 Tensor
-        img_tensor = TF.to_tensor(img)  # shape: [1, H, W]
-        mask_tensor = torch.as_tensor(TF.pil_to_tensor(mask).squeeze(0), dtype=torch.long)  # shape: [H, W]
+        img_tensor = TF.to_tensor(img)  # float32: [1, H, W]
+        mask_tensor = torch.as_tensor(TF.pil_to_tensor(mask).squeeze(0), dtype=torch.long)  # int64: [H, W]
 
         return img_tensor, mask_tensor
+
 
 

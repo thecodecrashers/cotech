@@ -8,7 +8,7 @@ from config import config
 
 # ====== 图像路径列表（支持多个） ======
 IMG_PATHS = [
-    r"C:\Users\86178\Desktop\小可智能\焊点 20250630\测试用图\焊点截图\焊点截图\_焊点图_光源1_3d263e2e-62b1-4f65-842b-3b6f0df927aa.png",
+    r"C:\Users\86178\Desktop\小可智能\焊点 20250630\测试用图\_焊点图_光源1_0b152950-bfc9-4ad2-8a10-6b324f0bcff2.png",
 ]
 
 # 是否保存预测结果图像
