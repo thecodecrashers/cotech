@@ -1,8 +1,7 @@
-# losses/combo_loss.py
-
 import torch.nn as nn
 from .dice_loss import dice_loss
 from .focal_loss import focal_loss
+from .boundary_loss import boundary_loss  # ✅ 新增导入
 
 def build_loss_fn(config):
     """构建适用于多类或多标签的组合损失"""
@@ -24,6 +23,9 @@ def build_loss_fn(config):
             loss_val += focal_loss(pred, target,
                                    alpha=loss_cfg.get("focal_alpha", 0.25),
                                    gamma=loss_cfg.get("focal_gamma", 2.0))
+        if loss_cfg.get("use_boundary", False):
+            loss_val += boundary_loss(pred, target)
         return loss_val
 
     return total_loss
+

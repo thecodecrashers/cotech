@@ -1,96 +1,94 @@
 import os
 import torch
 from torch import nn, optim
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader
 from models.registry import get_model
 from utils.dataset import SegmentationDataset
 from config import config
 from losses.combo_loss import build_loss_fn
 from tqdm import tqdm
+from torch.cuda.amp import autocast, GradScaler
+from utils.metrics import pixel_accuracy, mean_iou
 
-# ==== 可配置参数 ====
-fine_tune_img_dir = "fix_data/images"
-fine_tune_mask_dir = "fix_data/masks"
-fine_tune_save_path = "checkpoints/fine_tuned.pth"
-fine_tune_epochs = 5
-fine_tune_lr = 1e-6
-freeze_encoder = True
-use_mixed_training = True  # ✅ 是否与原训练集混合训练
-# ====================
 
-def freeze_backbone_params(model):
-    model_name = config["model_name"].lower()
-    if "unet" in model_name:
-        for name, param in model.named_parameters():
-            if "down" in name or "encoder" in name:
-                param.requires_grad = False
-    elif "segformer" in model_name:
-        for name, param in model.named_parameters():
-            if "backbone" in name:
-                param.requires_grad = False
+def align_prediction_size(preds, masks):
+    if preds.ndim == 4 and masks.ndim == 3:
+        if preds.shape[2:] != masks.shape[1:]:
+            preds = nn.functional.interpolate(preds, size=masks.shape[1:], mode="bilinear", align_corners=False)
     else:
-        print("⚠️ 未识别模型结构，未进行参数冻结")
-    print("🧊 已冻结 Encoder/Backbone 部分参数")
+        raise ValueError(f"Unsupported shape: preds={preds.shape}, masks={masks.shape}")
+    return preds
 
-def train_finetune():
-    device = config["device"]
 
-    # === 加载模型 ===
-    model = get_model(config["model_name"],
-                      in_channels=config["in_channels"],
-                      out_channels=config["out_channels"]).to(device)
-    model.load_state_dict(torch.load(config["save_path"], map_location=device))
-    print(f"📦 已加载模型参数: {config['save_path']}")
+def freeze_layers(model):
+    if config.get("freeze_encoder", False):
+        print("🧊 冻结编码器层")
+        if hasattr(model, "encoder"):
+            for param in model.encoder.parameters():
+                param.requires_grad = False
+        else:
+            print("⚠️ 未找到 'encoder' 属性，无法冻结")
 
-    if freeze_encoder:
-        freeze_backbone_params(model)
 
-    # === 构建微调数据集 ===
-    fix_dataset = SegmentationDataset(
-        fine_tune_img_dir, fine_tune_mask_dir,
-        image_size=config["input_size"], augment=True
+def fine_tune():
+    assert os.path.exists(config["fine_tune_img_dir"]), "❌ 未找到 fine_tune_img_dir"
+    assert os.path.exists(config["fine_tune_mask_dir"]), "❌ 未找到 fine_tune_mask_dir"
+    os.makedirs(os.path.dirname(config["fine_tune_save_path"]), exist_ok=True)
+
+    # === 准备模型 ===
+    model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(config["device"])
+    model.load_state_dict(torch.load(config["save_path"], map_location=config["device"]))
+    freeze_layers(model)
+    model.train()
+
+    # === 微调数据集 ===
+    fine_tune_set = SegmentationDataset(
+        config["fine_tune_img_dir"],
+        config["fine_tune_mask_dir"],
+        config["input_size"],
+        augment=True
     )
+    loader = DataLoader(fine_tune_set, batch_size=config["fine_tune_batch_size"], shuffle=True)
 
-    if use_mixed_training:
-        print("🔀 使用混合训练模式（原训练集 + 错误样本）")
-        train_dataset = SegmentationDataset(
-            config["train_img_dir"], config["train_mask_dir"],
-            image_size=config["input_size"], augment=True
-        )
-        total_dataset = ConcatDataset([train_dataset, fix_dataset])
-    else:
-        print("🧪 仅使用错误样本进行微调")
-        total_dataset = fix_dataset
-
-    loader = DataLoader(total_dataset, batch_size=config["batch_size"], shuffle=True)
-
-    # === 损失 & 优化器 ===
+    # === 优化器和损失函数 ===
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config["fine_tune_lr"])
     criterion = build_loss_fn(config)
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=fine_tune_lr)
 
-    # === 开始微调训练 ===
-    for epoch in range(fine_tune_epochs):
+    # === 混合精度和累积梯度 ===
+    use_amp = config.get("use_amp", False)
+    accum_iter = config.get("accum_iter", 1)
+    scaler = GradScaler(enabled=use_amp)
+
+    # === 微调训练 ===
+    for epoch in range(config["fine_tune_epochs"]):
         model.train()
         total_loss = 0
-        pbar = tqdm(loader, desc=f"Fine-tune Epoch {epoch+1}/{fine_tune_epochs}")
-        for imgs, masks in pbar:
-            imgs, masks = imgs.to(device), masks.to(device)
-            preds = model(imgs)
-            loss = criterion(preds, masks)
+        optimizer.zero_grad()
+        bar = tqdm(enumerate(loader), total=len(loader), desc=f"[微调] Epoch {epoch+1}/{config['fine_tune_epochs']}")
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        for step, (imgs, masks) in bar:
+            imgs, masks = imgs.to(config["device"]), masks.to(config["device"])
 
-            total_loss += loss.item()
-            pbar.set_postfix(loss=loss.item())
+            with autocast(enabled=use_amp):
+                preds = model(imgs)
+                loss = criterion(preds, masks) / accum_iter
 
-        avg_loss = total_loss / len(loader)
-        print(f"✅ Epoch {epoch+1} 微调平均 Loss: {avg_loss:.4f}")
+            scaler.scale(loss).backward()
 
-    # === 保存微调后的模型 ===
-    torch.save(model.state_dict(), fine_tune_save_path)
-    print(f"✅ 微调模型保存至: {fine_tune_save_path}")
+            if (step + 1) % accum_iter == 0 or (step + 1) == len(loader):
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
+
+            total_loss += loss.item() * accum_iter
+            bar.set_postfix(loss=loss.item() * accum_iter)
+
+        print(f"📉 Epoch {epoch+1}: Fine-tune loss: {total_loss / len(loader):.4f}")
+
+    # === 保存微调模型 ===
+    torch.save(model.state_dict(), config["fine_tune_save_path"])
+    print(f"✅ 微调完成，模型保存至: {config['fine_tune_save_path']}")
+
 
 if __name__ == "__main__":
-    train_finetune()
+    fine_tune()

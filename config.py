@@ -27,6 +27,18 @@ config = {
     "checkpoint_path": r"C:\Users\86178\Desktop\小可智能\项目\checkpoint/checkpoint.pth", # 中断点模型保存路径（train.py）
     "log_csv": r"C:\Users\86178\Desktop\小可智能\项目\logs/loss_log.csv",                         # 训练损失日志路径（train.py）
     "val_vis_dir": "val_vis",     # 可视化输出路径（validate.py）
+    
+    # ====================错误样本重新训练，微调相关东西 ====================
+    "fine_tune_img_dir": "./misclassified/images",
+    "fine_tune_mask_dir": "./misclassified/masks",
+    "fine_tune_epochs": 10,
+    "fine_tune_lr": 1e-5,
+    "fine_tune_batch_size": 4,
+    "fine_tune_save_path": "./checkpoints/fine_tuned_model.pth",
+    "freeze_encoder": True,
+    "use_amp": True,
+    "accum_iter": 1,
+
 
     # ====================🧠 学习率与 epoch 配置（train.py / fine_tune.py） ====================
     "epochs": 2,                  # 训练 epoch（train.py 使用）
@@ -37,7 +49,8 @@ config = {
         "use_ce": True,           # ✅ 多分类任务使用 CrossEntropyLoss
         "use_bce": False,         # ❌ 禁用 BCE（用于二分类）
         "use_dice": False,        # ❌ 禁用 Dice Loss
-        "use_focal": False        # ❌ 禁用 Focal Loss
+        "use_focal": False,        # ❌ 禁用 Focal Loss
+        "use_boundary": False,    # ❌ 禁用边界损失
     }
 }
 
