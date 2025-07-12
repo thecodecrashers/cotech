@@ -1,16 +1,13 @@
-
-#添加人工标注功能节约时间判断预测是否出现问题这个样子
 import os
 import json
 import numpy as np
 from PIL import Image
 import torch
 import torchvision.transforms.functional as TF
-import cv2
 import matplotlib.pyplot as plt
 
 from models.registry import get_model
-from config import config
+from config import config  # ✅ 自行准备 config 字典或模块
 
 # ==== 路径配置 ====
 IMAGE_DIR = r"C:\Users\86178\Desktop\小可智能\焊点 20250630\测试用图"
@@ -23,12 +20,12 @@ os.makedirs(WRONG_DIR, exist_ok=True)
 
 device = config["device"]
 
-# ==== 模型加载 ====
+# ==== 加载模型 ====
 model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(device)
 model.load_state_dict(torch.load(config["save_path"], map_location=device))
 model.eval()
 
-# ==== padding ====
+# ==== padding + crop ====
 def pad_and_record(image: Image.Image, target_size):
     orig_w, orig_h = image.size
     target_w, target_h = target_size
@@ -42,7 +39,7 @@ def crop_back(tensor: torch.Tensor, pad_info):
     left, top, orig_w, orig_h = pad_info
     return tensor[..., top:top+orig_h, left:left+orig_w]
 
-# ==== 预测 ====
+# ==== mask 预测 ====
 def predict_mask(image: Image.Image):
     padded, pad_info = pad_and_record(image, config["input_size"])
     input_tensor = TF.to_tensor(padded).unsqueeze(0).to(device)
@@ -52,7 +49,8 @@ def predict_mask(image: Image.Image):
         cropped = crop_back(mask, pad_info)
         return cropped.squeeze(0).cpu().numpy().astype(np.uint8)
 
-# ==== mask 转 polygon ====
+# ==== mask → polygon ====
+import cv2
 def mask_to_shapes(mask: np.ndarray, max_points=10):
     shapes = []
     for class_id in range(1, int(mask.max()) + 1):
@@ -76,7 +74,7 @@ def mask_to_shapes(mask: np.ndarray, max_points=10):
                 })
     return shapes
 
-# ==== 可视化 ====
+# ==== 可视化保存 ====
 def visualize(image: Image.Image, mask: np.ndarray, outname: str):
     fig, axs = plt.subplots(1, 3, figsize=(15, 5))
     axs[0].imshow(image, cmap='gray')
@@ -90,11 +88,32 @@ def visualize(image: Image.Image, mask: np.ndarray, outname: str):
         ax.axis("off")
     plt.tight_layout()
     vis_path = os.path.join(VIS_DIR, f"{outname}_vis.png")
-    plt.savefig(vis_path)
+    plt.savefig(vis_path, bbox_inches='tight')
     plt.close()
     return vis_path
 
-# ==== 主处理 ====
+# ==== 人工判断界面 ====
+def show_for_review(vis_path):
+    img = Image.open(vis_path)
+    while True:
+        plt.imshow(img)
+        plt.axis("off")
+        plt.title("Prediction Review\n[y] 正确 | [n] 错误 | [q] 退出")
+        plt.show(block=False)
+        key = input("👉 请输入标注结果 (y/n/q): ").strip().lower()
+        plt.close()
+
+        if key == 'y':
+            return 'correct'
+        elif key == 'n':
+            return 'wrong'
+        elif key == 'q':
+            print("👋 已退出人工标注")
+            exit()
+        else:
+            print("⚠️ 无效输入，请重新输入：y（正确）/n（错误）/q（退出）")
+
+# ==== 单图处理 ====
 def process_image(image_path):
     base = os.path.splitext(os.path.basename(image_path))[0]
     json_path = os.path.join(IMAGE_DIR, base + ".json")
@@ -123,23 +142,9 @@ def process_image(image_path):
     print(f"✅ JSON 生成：{json_path}")
     vis_path = visualize(image, mask, base)
 
-    # 人工判断
-    img = cv2.imread(vis_path)
-    cv2.imshow("Prediction Review (y: 正确, n: 错误, q: 退出)", img)
-    key = cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-    # 分类存储
-    if key == ord('y'):
-        dest_folder = CORRECT_DIR
-    elif key == ord('n'):
-        dest_folder = WRONG_DIR
-    elif key == ord('q'):
-        print("👋 已退出人工标注")
-        exit()
-    else:
-        print("⚠️ 无效输入，跳过当前图像")
-        return
+    # 人工分类
+    result = show_for_review(vis_path)
+    dest_folder = CORRECT_DIR if result == 'correct' else WRONG_DIR
 
     for ext in [".png", ".jpg", ".bmp", ".json"]:
         src = os.path.join(IMAGE_DIR, base + ext)
@@ -148,12 +153,12 @@ def process_image(image_path):
             os.rename(src, dst)
             print(f"➡️ 移动至: {dst}")
 
-
-# ==== 批处理入口 ====
+# ==== 批量入口 ====
 if __name__ == "__main__":
     for fname in os.listdir(IMAGE_DIR):
         if fname.lower().endswith((".png", ".bmp", ".jpg")):
             process_image(os.path.join(IMAGE_DIR, fname))
+
 
 
 

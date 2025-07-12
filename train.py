@@ -79,7 +79,7 @@ def train():
     os.makedirs(os.path.dirname(config["log_csv"]), exist_ok=True)
 
     model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(config["device"])
-    train_set = SegmentationDataset(config["train_img_dir"], config["train_mask_dir"], config["input_size"], augment=True)
+    train_set = SegmentationDataset(config["train_img_dir"], config["train_mask_dir"], config["input_size"], augment=False)
     train_loader = DataLoader(train_set, batch_size=config["batch_size"], shuffle=True)
 
     do_validation = os.path.exists(config["val_img_dir"]) and len(os.listdir(config["val_img_dir"])) > 0
