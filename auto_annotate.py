@@ -7,10 +7,11 @@ import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 
 from models.registry import get_model
-from config import config  # ✅ 自行准备 config 字典或模块
+with open("config.json", "r", encoding="utf-8") as f:
+    config = json.load(f)  # ✅ 自行准备 config 字典或模块
 
 # ==== 路径配置 ====
-IMAGE_DIR = r"C:\Users\86178\Desktop\小可智能\焊点 20250630\测试用图"
+IMAGE_DIR = config["annotate_img_dir"]
 VIS_DIR = os.path.join(IMAGE_DIR, "vis")
 CORRECT_DIR = os.path.join(IMAGE_DIR, "correct")
 WRONG_DIR = os.path.join(IMAGE_DIR, "wrong")
@@ -22,7 +23,7 @@ device = config["device"]
 
 # ==== 加载模型 ====
 model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(device)
-model.load_state_dict(torch.load(config["save_path"], map_location=device))
+model.load_state_dict(torch.load(os.path.join(config["save_dir"],config["save_filename"]), map_location=device))
 model.eval()
 
 # ==== padding + crop ====

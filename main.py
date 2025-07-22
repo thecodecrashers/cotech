@@ -261,8 +261,23 @@ class MainUI(QWidget):
                 subprocess.Popen(["labelme", folder])
             except FileNotFoundError:
                 QMessageBox.critical(self, "未找到 labelme", "请确保已安装 labelme 并添加到环境变量中。")
+                
+        pretrain_btn=QPushButton("📥 自动标注模型")
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         start_btn.clicked.connect(start_labelme)
         layout.addWidget(start_btn)
+        layout.addWidget(pretrain_btn)
 
         layout.addStretch()
         return page
