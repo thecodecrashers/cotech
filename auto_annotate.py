@@ -1,4 +1,106 @@
-import os
+import os, json, numpy as np, cv2
+from PIL import Image
+import torch
+import torchvision.transforms.functional as TF
+from tqdm import tqdm
+
+from config import config
+from models.registry import get_model
+
+device = config["device"]
+model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(device)
+model.load_state_dict(torch.load(os.path.join(config["save_dir"],config["save_filename"]), map_location=device))
+model.eval()
+
+input_h, input_w = config["input_size"]
+stride_h, stride_w = input_h/2, input_w/2  # 滑动窗口步长
+
+def sliding_window_prediction(image: Image.Image):
+    w, h = image.size
+    pad_w = (input_w - w % stride_w) % stride_w
+    pad_h = (input_h - h % stride_h) % stride_h
+    image = TF.pad(image, [0, 0, pad_w, pad_h], fill=0)
+
+    w_p, h_p = image.size
+    mask_total = np.zeros((h_p, w_p), dtype=np.uint16)
+    count_map = np.zeros((h_p, w_p), dtype=np.uint8)
+
+    for top in range(0, h_p - input_h + 1, stride_h):
+        for left in range(0, w_p - input_w + 1, stride_w):
+            patch = image.crop((left, top, left + input_w, top + input_h))
+            tensor = TF.to_tensor(patch).unsqueeze(0).to(device)
+            with torch.no_grad():
+                pred = model(tensor)[0].argmax(0).cpu().numpy()
+            mask_total[top:top+input_h, left:left+input_w] += pred
+            count_map[top:top+input_h, left:left+input_w] += 1
+
+    count_map[count_map == 0] = 1
+    final_mask = (mask_total / count_map).astype(np.uint8)
+    return final_mask[:h, :w]  # 裁回原始尺寸
+
+def mask_to_shapes(mask: np.ndarray, max_points=10):
+    shapes = []
+    for class_id in range(1, int(mask.max()) + 1):
+        binary = (mask == class_id).astype(np.uint8) * 255
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        for cnt in contours:
+            if len(cnt) >= 3:
+                cnt = cnt.squeeze(1)
+                if len(cnt) > max_points:
+                    idx = np.linspace(0, len(cnt) - 1, max_points, dtype=int)
+                    cnt = cnt[idx]
+                points = [[float(x), float(y)] for x, y in cnt]
+                shapes.append({
+                    "label": "welding_point",
+                    "points": points,
+                    "group_id": None,
+                    "description": "",
+                    "shape_type": "polygon",
+                    "flags": {}
+                })
+    return shapes
+
+def annotate_one(image_path: str):
+    base = os.path.splitext(os.path.basename(image_path))[0]
+    json_path = os.path.join(os.path.dirname(image_path), base + ".json")
+    image = Image.open(image_path).convert("L")
+    mask = sliding_window_prediction(image)
+    shapes = mask_to_shapes(mask, max_points=config["max_points"])
+    if not shapes:
+        print(f"⚠️ 无有效轮廓: {base}")
+        return
+    data = {
+        "version": "5.0.1",
+        "flags": {},
+        "shapes": shapes,
+        "imagePath": os.path.basename(image_path),
+        "imageData": None,
+        "imageHeight": image.height,
+        "imageWidth": image.width
+    }
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    print(f"✅ 标注完成: {json_path}")
+
+def main():
+    files = [f for f in os.listdir(config["annotate_dir"]) if f.lower().endswith((".png", ".jpg", ".bmp"))]
+    pbar = tqdm(files, desc="自动标注中")
+    for f in pbar:
+        annotate_one(os.path.join(config["annotate_dir"], f))
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+
+
+
+"""import os
 import json
 import numpy as np
 from PIL import Image
@@ -159,6 +261,7 @@ if __name__ == "__main__":
     for fname in os.listdir(IMAGE_DIR):
         if fname.lower().endswith((".png", ".bmp", ".jpg")):
             process_image(os.path.join(IMAGE_DIR, fname))
+"""
 
 
 
@@ -166,8 +269,7 @@ if __name__ == "__main__":
 
 
 
-
-r"""import os
+"""import os
 import json
 import numpy as np
 from PIL import Image
@@ -176,10 +278,11 @@ import torchvision.transforms.functional as TF
 import cv2
 
 from models.registry import get_model
-from config import config  # ✅ 用你自己的配置文件
+with open("config.json", "r", encoding="utf-8") as f:
+    config = json.load(f)  # ✅ 用你自己的配置文件
 
 # ==== 路径配置（自动从 config 中读取）====
-IMAGE_DIR = r"C:\Users\86178\Desktop\小可智能\焊点 20250630\测试用图"
+IMAGE_DIR = config["annotate_img_dir"]
 VIS_DIR = os.path.join(IMAGE_DIR, "vis")
 os.makedirs(VIS_DIR, exist_ok=True)
 
@@ -191,7 +294,7 @@ model = get_model(
     config["in_channels"],
     config["out_channels"]
 ).to(device)
-model.load_state_dict(torch.load(config["save_path"], map_location=device))
+model.load_state_dict(torch.load(os.path.join(config["save_dir"],config["save_filename"]), map_location=device))
 model.eval()
 
 # ==== padding + 记录信息 ====

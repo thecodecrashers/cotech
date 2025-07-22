@@ -123,7 +123,7 @@ class MainUI(QWidget):
         self.btn_finetune = QPushButton("🔧 微调模型")
         self.btn_predict = QPushButton("📤 模型推理")
 
-        for btn in [self.btn_annotate, self.btn_data, self.btn_train, self.btn_finetune, self.btn_predict]:
+        for btn in [self.btn_annotate, self.btn_data, self.btn_train, self.btn_predict,self.btn_finetune,]:
             btn.setFixedHeight(40)
             button_layout.addWidget(btn)
         main_layout.addLayout(button_layout)
@@ -142,9 +142,8 @@ class MainUI(QWidget):
         self.stack.addWidget(self.page_annotate)
         self.stack.addWidget(self.page_data)
         self.stack.addWidget(self.page_train)
-        self.stack.addWidget(self.page_finetune)
         self.stack.addWidget(self.page_predict)
-
+        self.stack.addWidget(self.page_finetune)
         # 按钮绑定
         self.btn_data.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_data))
         self.btn_annotate.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_annotate))
@@ -207,80 +206,165 @@ class MainUI(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
 
-        # ===== 图像路径输入区 =====
-        path_layout = QHBoxLayout()
-        label = QLabel("📂 原始图像路径：")
-        label.setFixedWidth(150)
+        # ======= 参数自动化配置控件（ConfigFragment） =======
+        config = ConfigFragment(
+            "config.json",
+            fields=[
+                "annotate_img_dir",
+                "pretrain_augment_times",
+                "pretrain_device",
+                "pretrain_model_name",
+                "pretrain_batch_size",
+                "pretrain_lr",
+                "pretrain_epochs",
+                "pretrain_warmup_factor",
+                "pretrain_checkpoint_dir",
+                "pretrain_checkpoint_filename",
+                "pretrain_save_dir",
+                "pretrain_save_filename"
+            ],
+            label_map={
+                "annotate_img_dir":        "标注图像路径",
+                "pretrain_augment_times":  "增强次数",
+                "pretrain_device":         "训练设备",
+                "pretrain_model_name":     "模型名称",
+                "pretrain_batch_size":     "Batch Size",
+                "pretrain_lr":             "学习率",
+                "pretrain_epochs":         "训练轮数",
+                "pretrain_warmup_factor":  "Warmup因子",
+                "pretrain_checkpoint_dir": "Checkpoint目录",
+                "pretrain_checkpoint_filename": "Checkpoint文件名",
+                "pretrain_save_dir":       "模型保存目录",
+                "pretrain_save_filename":  "模型文件名"
+            }
+        )
 
-        with open("config.json", "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-        default_path = cfg.get("annotate_img_dir", "")
-
-        self.annotate_img_input = QLineEdit(default_path)
-        self.annotate_img_input.setMinimumWidth(400)
-
-        browse_btn = QPushButton("📁 浏览")
-        def browse_folder():
-            folder = QFileDialog.getExistingDirectory(self, "选择图像文件夹")
-            if folder:
-                self.annotate_img_input.setText(folder)
-        browse_btn.clicked.connect(browse_folder)
-
-        path_layout.addWidget(label)
-        path_layout.addWidget(self.annotate_img_input)
-        path_layout.addWidget(browse_btn)
-        layout.addLayout(path_layout)
-
-        # 保存路径按钮
-        save_btn = QPushButton("💾 保存路径到 config.json")
-        def save_path():
-            folder = self.annotate_img_input.text().strip()
-            if not folder:
-                QMessageBox.warning(self, "路径为空", "请输入或选择一个文件夹路径")
-                return
-            try:
-                with open("config.json", "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-                cfg["annotate_img_dir"] = folder
-                with open("config.json", "w", encoding="utf-8") as f:
-                    json.dump(cfg, f, indent=2, ensure_ascii=False)
-                QMessageBox.information(self, "成功", "路径已保存到 config.json")
-            except Exception as e:
-                QMessageBox.critical(self, "保存失败", str(e))
-        save_btn.clicked.connect(save_path)
-        layout.addWidget(save_btn)
-
-        # 启动标注按钮
-        start_btn = QPushButton("▶ 启动标注（打开 labelme）")
+        # ======= 标注/训练/自动标注 按钮 =======
+        start_labelme_btn = QPushButton("▶ 启动标注（labelme）")
         def start_labelme():
-            folder = self.annotate_img_input.text().strip()
+            import subprocess
+            import json
+            with open("config.json", "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            folder = cfg.get("annotate_img_dir", "")
             if not folder:
-                QMessageBox.warning(self, "路径未填写", "请先选择原始图像路径")
+                QMessageBox.warning(self, "未填写路径", "请填写标注图像路径")
                 return
             try:
                 subprocess.Popen(["labelme", folder])
-            except FileNotFoundError:
-                QMessageBox.critical(self, "未找到 labelme", "请确保已安装 labelme 并添加到环境变量中。")
-                
-        pretrain_btn=QPushButton("📥 自动标注模型")
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        start_btn.clicked.connect(start_labelme)
-        layout.addWidget(start_btn)
-        layout.addWidget(pretrain_btn)
+            except Exception as e:
+                QMessageBox.critical(self, "启动失败", str(e))
+        start_labelme_btn.clicked.connect(start_labelme)
 
+        pretrain_btn = QPushButton("自动标注模型训练")
+        def pretrain():
+            try:
+                if platform.system() == "Windows":
+                    subprocess.Popen(["start", "cmd", "/k", "python pretrain.py"], shell=True)
+                else:
+                    # Linux/macOS 示例，使用 gnome-terminal / bash
+                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 train.py"])
+            except Exception as e:
+                QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+        # def pretrain():
+        #     # 路径根据实际情况填写
+        #     try:
+        #         result = subprocess.run(["python", "pretrain.py"], check=True,
+        #             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        #         QMessageBox.information(self, "训练完成", result.stdout[-1000:])
+        #     except subprocess.CalledProcessError as e:
+        #         QMessageBox.critical(self, "训练失败", e.stderr)
+        pretrain_btn.clicked.connect(pretrain)
+
+        auto_annotate_btn = QPushButton("自动标注（TODO）")
+        def auto_annotate():
+            try:
+                if platform.system() == "Windows":
+                    subprocess.Popen(["start", "cmd", "/k", "python auto_annotate.py"], shell=True)
+                else:
+                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 auto_annotate.py"])
+            except Exception as e:
+                QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+        auto_annotate_btn.clicked.connect(auto_annotate)
+
+        # ======= 布局 =======
+        layout.addWidget(config)
+        layout.addWidget(start_labelme_btn)
+        layout.addWidget(pretrain_btn)
+        layout.addWidget(auto_annotate_btn)
         layout.addStretch()
         return page
+
+
+#region
+    # def create_annotate_page(self):
+    #     page = QWidget()
+    #     layout = QVBoxLayout(page)
+
+    #     # ===== 图像路径输入区 =====
+    #     path_layout = QHBoxLayout()
+    #     label = QLabel("📂 原始图像路径：")
+    #     label.setFixedWidth(150)
+
+    #     with open("config.json", "r", encoding="utf-8") as f:
+    #         cfg = json.load(f)
+    #     default_path = cfg.get("annotate_img_dir", "")
+
+    #     self.annotate_img_input = QLineEdit(default_path)
+    #     self.annotate_img_input.setMinimumWidth(400)
+
+    #     browse_btn = QPushButton("📁 浏览")
+    #     def browse_folder():
+    #         folder = QFileDialog.getExistingDirectory(self, "选择图像文件夹")
+    #         if folder:
+    #             self.annotate_img_input.setText(folder)
+    #     browse_btn.clicked.connect(browse_folder)  
+
+    #     path_layout.addWidget(label)
+    #     path_layout.addWidget(self.annotate_img_input)
+    #     path_layout.addWidget(browse_btn)
+    #     layout.addLayout(path_layout)
+
+    #     # 保存路径按钮
+    #     save_btn = QPushButton("💾 保存路径到 config.json")
+    #     def save_path():
+    #         folder = self.annotate_img_input.text().strip()
+    #         if not folder:
+    #             QMessageBox.warning(self, "路径为空", "请输入或选择一个文件夹路径")
+    #             return
+    #         try:
+    #             with open("config.json", "r", encoding="utf-8") as f:
+    #                 cfg = json.load(f)
+    #             cfg["annotate_img_dir"] = folder
+    #             with open("config.json", "w", encoding="utf-8") as f:
+    #                 json.dump(cfg, f, indent=2, ensure_ascii=False)
+    #             QMessageBox.information(self, "成功", "路径已保存到 config.json")
+    #         except Exception as e:
+    #             QMessageBox.critical(self, "保存失败", str(e))
+    #     save_btn.clicked.connect(save_path)
+    #     layout.addWidget(save_btn)
+
+    #     # 启动标注按钮
+    #     start_btn = QPushButton("▶ 启动标注（打开 labelme）")
+    #     def start_labelme():
+    #         folder = self.annotate_img_input.text().strip()
+    #         if not folder:
+    #             QMessageBox.warning(self, "路径未填写", "请先选择原始图像路径")
+    #             return
+    #         try:
+    #             subprocess.Popen(["labelme", folder])
+    #         except FileNotFoundError:
+    #             QMessageBox.critical(self, "未找到 labelme", "请确保已安装 labelme 并添加到环境变量中。")
+                
+    #     pretrain_btn=QPushButton("自动标注模型训练")
+    #     auto_annotate_btn=QPushButton("自动标注（TODO）")
+    #     start_btn.clicked.connect(start_labelme)
+    #     layout.addWidget(start_btn)
+    #     layout.addWidget(pretrain_btn)
+    #     layout.addWidget(auto_annotate_btn)
+    #     layout.addStretch()
+    #     return page
+#endregion
 
     def create_train_page(self):
         page = QWidget()
@@ -378,7 +462,13 @@ class MainUI(QWidget):
     def create_finetune_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        config = ConfigFragment("config.json", ["fine_tune_lr", "fine_tune_epochs", "fine_tune_save_path"])
+        config = ConfigFragment("config.json", fields=[  "fine_tune_img_dir",
+                                                       "fine_tune_mask_dir",
+                                                       "fine_tune_epochs",
+                                                       "fine_tune_lr",
+                                                       "fine_tune_batch_size",
+                                                       "fine_tune_save_path",
+                                                       "freeze_encoder"])
         run_btn = QPushButton("▶ 开始微调")
         layout.addWidget(config)
         layout.addWidget(run_btn)
@@ -388,8 +478,20 @@ class MainUI(QWidget):
     def create_predict_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        config = ConfigFragment("config.json", ["test_img_dir", "test_mask_dir", "model_name"])
+        config = ConfigFragment("config.json", fields=[
+                                                        "human_filter_path",
+                                                       "hum_filter_bad_picture"])
         run_btn = QPushButton("▶ 开始推理")
+        def run_predict():
+            try:
+                if platform.system() == "Windows":
+                    subprocess.Popen(["start", "cmd", "/k", "python human_filter.py"], shell=True)
+                else:
+                    # Linux/macOS 示例，使用 gnome-terminal / bash
+                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 human_filter.py"])
+            except Exception as e:
+                QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+        run_btn.clicked.connect(run_predict)
         layout.addWidget(config)
         layout.addWidget(run_btn)
         layout.addStretch()
