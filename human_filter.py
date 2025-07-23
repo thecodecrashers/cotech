@@ -14,7 +14,7 @@ with open("config.json", "r", encoding="utf-8") as f:
     config = json.load(f)
 
 IMG_DIR = config["human_filter_path"]         # 需要预测的图片文件夹
-BAD_DIR = config["hum_filter_bad_picture"]              # 差的图片复制到这个目录
+BAD_DIR = config["hum_filter_bad_picture_path"]              # 差的图片复制到这个目录
 os.makedirs(BAD_DIR, exist_ok=True)
 
 device = config["device"]

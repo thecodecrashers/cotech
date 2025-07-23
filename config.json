@@ -10,8 +10,6 @@
   "pretrain_checkpoint_filename": "checkpoint.pth",
   "pretrain_save_dir": "C:/Users/86178/Desktop/小可智能/输出结果",
   "pretrain_save_filename": "best_Unet.pth",
-
-
   "preprocess_train_ratio": 0.1,
   "preprocess_val_ratio": 0.1,
   "preprocess_test_ratio": 0.8,
@@ -42,8 +40,6 @@
   "log_dir": "C:/Users/86178/Desktop/小可智能/项目/logs",
   "log_filename": "loss_log.csv",
   "val_vis_dir": "val_vis",
-
-
   "fine_tune_img_dir": "./misclassified/images",
   "fine_tune_mask_dir": "./misclassified/masks",
   "fine_tune_epochs": 10,
@@ -51,7 +47,6 @@
   "fine_tune_batch_size": 4,
   "fine_tune_save_path": "./checkpoints/fine_tuned_model.pth",
   "freeze_encoder": true,
-  
   "epochs": 2,
   "lr": 0.0001,
   "loss": {
@@ -63,5 +58,11 @@
   },
   "annotate_img_dir": "D:/小可智能/焊点 20250630/机器标注测试/最新的测试图非红光",
   "human_filter_path": "D:/小可智能/焊点 20250630/机器标注测试/最新的测试图非红光/human_filter",
-  "hum_filter_bad_picture": "D:/小可智能/焊点 20250630/机器标注测试/最新的测试图非红光/hum_filter_bad_picture"
+  "hum_filter_bad_picture_path": "D:/小可智能/焊点 20250630/机器标注测试/最新的测试图非红光/hum_filter_bad_picture",
+
+
+
+  "host": "0.0.0.0",
+  "port": 5678,
+  "max_threads": 4
 }

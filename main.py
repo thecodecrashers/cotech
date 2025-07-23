@@ -122,8 +122,14 @@ class MainUI(QWidget):
         self.btn_train = QPushButton("🧠 模型训练")
         self.btn_finetune = QPushButton("🔧 微调模型")
         self.btn_predict = QPushButton("📤 模型推理")
+        self.btn_tcp_server = QPushButton("🌐 启动 TCP 服务器")
 
-        for btn in [self.btn_annotate, self.btn_data, self.btn_train, self.btn_predict,self.btn_finetune,]:
+        for btn in [self.btn_annotate, 
+                    self.btn_data, 
+                    self.btn_train, 
+                    self.btn_predict,
+                    self.btn_finetune,
+                    self.btn_tcp_server]:
             btn.setFixedHeight(40)
             button_layout.addWidget(btn)
         main_layout.addLayout(button_layout)
@@ -138,18 +144,21 @@ class MainUI(QWidget):
         self.page_train = self.wrap_scrollable_page(self.create_train_page())
         self.page_finetune = self.wrap_scrollable_page(self.create_finetune_page())
         self.page_predict = self.wrap_scrollable_page(self.create_predict_page())
+        self.page_tcp_server = self.wrap_scrollable_page(self.create_tcp_server_page())
 
         self.stack.addWidget(self.page_annotate)
         self.stack.addWidget(self.page_data)
         self.stack.addWidget(self.page_train)
         self.stack.addWidget(self.page_predict)
         self.stack.addWidget(self.page_finetune)
+        self.stack.addWidget(self.page_tcp_server)
         # 按钮绑定
         self.btn_data.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_data))
         self.btn_annotate.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_annotate))
         self.btn_train.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_train))
         self.btn_finetune.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_finetune))
         self.btn_predict.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_predict))
+        self.btn_tcp_server.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_tcp_server))
 
     def wrap_scrollable_page(self, widget: QWidget) -> QScrollArea:
         scroll = QScrollArea()
@@ -470,6 +479,16 @@ class MainUI(QWidget):
                                                        "fine_tune_save_path",
                                                        "freeze_encoder"])
         run_btn = QPushButton("▶ 开始微调")
+        def run_finetune():
+            try:
+                if platform.system() == "Windows":
+                    subprocess.Popen(["start", "cmd", "/k", "python fine_tune.py"], shell=True)
+                else:
+                    # Linux/macOS 示例，使用 gnome-terminal / bash
+                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 finetune.py"])
+            except Exception as e:
+                QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+        run_btn.clicked.connect(run_finetune)
         layout.addWidget(config)
         layout.addWidget(run_btn)
         layout.addStretch()
@@ -480,7 +499,7 @@ class MainUI(QWidget):
         layout = QVBoxLayout(page)
         config = ConfigFragment("config.json", fields=[
                                                         "human_filter_path",
-                                                       "hum_filter_bad_picture"])
+                                                       "hum_filter_bad_picture_path"])
         run_btn = QPushButton("▶ 开始推理")
         def run_predict():
             try:
@@ -492,6 +511,36 @@ class MainUI(QWidget):
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         run_btn.clicked.connect(run_predict)
+        layout.addWidget(config)
+        layout.addWidget(run_btn)
+        layout.addStretch()
+        return page
+    
+    def create_tcp_server_page(self):
+        page=QWidget()
+        layout=QVBoxLayout(page)
+        config=ConfigFragment("config.json", fields=["model_name",
+                                                     "in_channels",
+                                                     "out_channels",
+                                                     "input_size",
+                                                     "save_dir",
+                                                     "save_filename",
+                                                     "device",
+                                                     "host",
+                                                     "port",
+                                                     "max_threads"
+                                                     ])
+        run_btn= QPushButton("▶ 启动 TCP 服务器")
+        def run_tcp_server():
+            try:
+                if platform.system() == "Windows":
+                    subprocess.Popen(["start", "cmd", "/k", "python tcp_server.py"], shell=True)
+                else:
+                    # Linux/macOS 示例，使用 gnome-terminal / bash
+                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 tcp_server.py"])
+            except Exception as e:
+                QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+        run_btn.clicked.connect(run_tcp_server)
         layout.addWidget(config)
         layout.addWidget(run_btn)
         layout.addStretch()

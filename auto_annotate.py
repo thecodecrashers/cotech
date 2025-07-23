@@ -4,7 +4,9 @@ import torch
 import torchvision.transforms.functional as TF
 from tqdm import tqdm
 
-from config import config
+with open("config.json", "r", encoding="utf-8") as f:
+    config = json.load(f)
+
 from models.registry import get_model
 
 device = config["device"]
