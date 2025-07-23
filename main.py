@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QScrollArea
 from PyQt5.QtCore import QProcess
 import platform
-
+from utils import launch_python_script
 
 # ========================== 共用配置小部件 ==========================
 
@@ -194,16 +194,32 @@ class MainUI(QWidget):
         run_btn = QPushButton("▶ 运行数据处理脚本")
         def run_preprocessing():
             try:
-                # 路径根据实际放置的位置修改
-                result=subprocess.run(["python", "utils/split_labeled_dataset.py"], check=True,
+                python_path = sys.executable  # 当前 PyQt 运行用的 Python
+                script_path = os.path.abspath("utils/split_labeled_dataset.py")
+
+                result = subprocess.run([python_path, script_path], check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True)
-                QMessageBox.information(self, "完成", f"处理输出：\n{result.stdout}")
+
+                QMessageBox.information(None, "完成", f"处理输出：\n{result.stdout}")
             except subprocess.CalledProcessError as e:
-                QMessageBox.critical(self, "错误", f"运行失败：\n{e}")
+                QMessageBox.critical(None, "错误", f"运行失败：\n{e.stderr}")
             except FileNotFoundError:
-                QMessageBox.critical(self, "错误", "未找到 Python 可执行文件，请确认环境设置")
+                QMessageBox.critical(None, "错误", "未找到 Python 可执行文件，请确认环境设置")
+        
+        # def run_preprocessing():
+        #     try:
+        #         # 路径根据实际放置的位置修改
+        #         result=subprocess.run(["python", "utils/split_labeled_dataset.py"], check=True,
+        #             stdout=subprocess.PIPE,
+        #             stderr=subprocess.PIPE,
+        #             text=True)
+        #         QMessageBox.information(self, "完成", f"处理输出：\n{result.stdout}")
+        #     except subprocess.CalledProcessError as e:
+        #         QMessageBox.critical(self, "错误", f"运行失败：\n{e}")
+        #     except FileNotFoundError:
+        #         QMessageBox.critical(self, "错误", "未找到 Python 可执行文件，请确认环境设置")
 
         run_btn.clicked.connect(run_preprocessing)
         layout.addWidget(config)
@@ -230,7 +246,8 @@ class MainUI(QWidget):
                 "pretrain_checkpoint_dir",
                 "pretrain_checkpoint_filename",
                 "pretrain_save_dir",
-                "pretrain_save_filename"
+                "pretrain_save_filename",
+                "annotate_dir"
             ],
             label_map={
                 "annotate_img_dir":        "标注图像路径",
@@ -251,8 +268,6 @@ class MainUI(QWidget):
         # ======= 标注/训练/自动标注 按钮 =======
         start_labelme_btn = QPushButton("▶ 启动标注（labelme）")
         def start_labelme():
-            import subprocess
-            import json
             with open("config.json", "r", encoding="utf-8") as f:
                 cfg = json.load(f)
             folder = cfg.get("annotate_img_dir", "")
@@ -260,7 +275,8 @@ class MainUI(QWidget):
                 QMessageBox.warning(self, "未填写路径", "请填写标注图像路径")
                 return
             try:
-                subprocess.Popen(["labelme", folder])
+                #subprocess.Popen(["labelme", folder])
+                subprocess.Popen(["python","run_labelme.py"],shell=True)
             except Exception as e:
                 QMessageBox.critical(self, "启动失败", str(e))
         start_labelme_btn.clicked.connect(start_labelme)
@@ -268,11 +284,12 @@ class MainUI(QWidget):
         pretrain_btn = QPushButton("自动标注模型训练")
         def pretrain():
             try:
-                if platform.system() == "Windows":
-                    subprocess.Popen(["start", "cmd", "/k", "python pretrain.py"], shell=True)
-                else:
-                    # Linux/macOS 示例，使用 gnome-terminal / bash
-                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 train.py"])
+                launch_python_script("pretrain.py")
+                # if platform.system() == "Windows":
+                #     subprocess.Popen(["start", "cmd", "/k", "python pretrain.py"], shell=True)
+                # else:
+                #     # Linux/macOS 示例，使用 gnome-terminal / bash
+                #     subprocess.Popen(["x-terminal-emulator", "-e", "python3 train.py"])
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         # def pretrain():
@@ -288,12 +305,17 @@ class MainUI(QWidget):
         auto_annotate_btn = QPushButton("自动标注（TODO）")
         def auto_annotate():
             try:
-                if platform.system() == "Windows":
-                    subprocess.Popen(["start", "cmd", "/k", "python auto_annotate.py"], shell=True)
-                else:
-                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 auto_annotate.py"])
+                launch_python_script("auto_annotate.py")
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+        # def auto_annotate():
+        #     try:
+        #         if platform.system() == "Windows":
+        #             subprocess.Popen(["start", "cmd", "/k", "python auto_annotate.py"], shell=True)
+        #         else:
+        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 auto_annotate.py"])
+        #     except Exception as e:
+        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         auto_annotate_btn.clicked.connect(auto_annotate)
 
         # ======= 布局 =======
@@ -437,13 +459,18 @@ class MainUI(QWidget):
         run_btn = QPushButton("▶ 开始训练")
         def run_in_cmd_window():
             try:
-                if platform.system() == "Windows":
-                    subprocess.Popen(["start", "cmd", "/k", "python train.py"], shell=True)
-                else:
-                    # Linux/macOS 示例，使用 gnome-terminal / bash
-                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 train.py"])
+                launch_python_script("train.py")
             except Exception as e:
-                QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+                QMessageBox.critical(None,"Mistake",f"Fail to launch:{str(e)}")
+        # def run_in_cmd_window():
+        #     try:
+        #         if platform.system() == "Windows":
+        #             subprocess.Popen(["start", "cmd", "/k", "python train.py"], shell=True)
+        #         else:
+        #             # Linux/macOS 示例，使用 gnome-terminal / bash
+        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 train.py"])
+        #     except Exception as e:
+        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
 
         run_btn.clicked.connect(run_in_cmd_window)        
         # def run_preprocessing():
@@ -481,13 +508,18 @@ class MainUI(QWidget):
         run_btn = QPushButton("▶ 开始微调")
         def run_finetune():
             try:
-                if platform.system() == "Windows":
-                    subprocess.Popen(["start", "cmd", "/k", "python fine_tune.py"], shell=True)
-                else:
-                    # Linux/macOS 示例，使用 gnome-terminal / bash
-                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 finetune.py"])
+                launch_python_script("fine_tune.py")
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+        # def run_finetune():
+        #     try:
+        #         if platform.system() == "Windows":
+        #             subprocess.Popen(["start", "cmd", "/k", "python fine_tune.py"], shell=True)
+        #         else:
+        #             # Linux/macOS 示例，使用 gnome-terminal / bash
+        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 finetune.py"])
+        #     except Exception as e:
+        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         run_btn.clicked.connect(run_finetune)
         layout.addWidget(config)
         layout.addWidget(run_btn)
@@ -498,18 +530,23 @@ class MainUI(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
         config = ConfigFragment("config.json", fields=[
-                                                        "human_filter_path",
-                                                       "hum_filter_bad_picture_path"])
+                                                        "human_filter_dir",
+                                                       "hum_filter_bad_picture_dir"])
         run_btn = QPushButton("▶ 开始推理")
         def run_predict():
             try:
-                if platform.system() == "Windows":
-                    subprocess.Popen(["start", "cmd", "/k", "python human_filter.py"], shell=True)
-                else:
-                    # Linux/macOS 示例，使用 gnome-terminal / bash
-                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 human_filter.py"])
+                launch_python_script("human_filter.py")
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+        # def run_predict():
+        #     try:
+        #         if platform.system() == "Windows":
+        #             subprocess.Popen(["start", "cmd", "/k", "python human_filter.py"], shell=True)
+        #         else:
+        #             # Linux/macOS 示例，使用 gnome-terminal / bash
+        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 human_filter.py"])
+        #     except Exception as e:
+        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         run_btn.clicked.connect(run_predict)
         layout.addWidget(config)
         layout.addWidget(run_btn)
@@ -533,13 +570,18 @@ class MainUI(QWidget):
         run_btn= QPushButton("▶ 启动 TCP 服务器")
         def run_tcp_server():
             try:
-                if platform.system() == "Windows":
-                    subprocess.Popen(["start", "cmd", "/k", "python tcp_server.py"], shell=True)
-                else:
-                    # Linux/macOS 示例，使用 gnome-terminal / bash
-                    subprocess.Popen(["x-terminal-emulator", "-e", "python3 tcp_server.py"])
+                launch_python_script("tcp_server.py")
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
+        # def run_tcp_server():
+        #     try:
+        #         if platform.system() == "Windows":
+        #             subprocess.Popen(["start", "cmd", "/k", "python tcp_server.py"], shell=True)
+        #         else:
+        #             # Linux/macOS 示例，使用 gnome-terminal / bash
+        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 tcp_server.py"])
+        #     except Exception as e:
+        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         run_btn.clicked.connect(run_tcp_server)
         layout.addWidget(config)
         layout.addWidget(run_btn)
@@ -552,176 +594,3 @@ if __name__ == "__main__":
     win = MainUI()
     win.show()
     sys.exit(app.exec_())
-
-
-
-
-
-
-# import sys
-# import json
-# from PyQt5.QtWidgets import (
-#     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-#     QLineEdit, QPushButton, QMessageBox, QFileDialog,
-#     QStackedLayout
-# )
-# from PyQt5.QtCore import Qt
-
-
-# # ========================== 配置编辑器组件 ==========================
-
-# class ConfigEditor(QWidget):
-#     def __init__(self, config_path="config.json"):
-#         super().__init__()
-#         self.setWindowTitle("配置编辑器")
-#         self.config_path = config_path
-#         self.inputs = {}
-
-#         self.layout = QVBoxLayout(self)
-#         self.load_config()
-#         self.build_ui()
-#         self.add_buttons()
-
-#     def load_config(self):
-#         with open(self.config_path, "r", encoding="utf-8") as f:
-#             self.config = json.load(f)
-
-#     def add_row(self, label_text, key_path, browse=False, is_file=False):
-#         hbox = QHBoxLayout()
-
-#         label = QLabel(label_text)
-#         label.setFixedWidth(200)
-
-#         value = self.get_value_by_path(key_path)
-#         edit = QLineEdit(str(value))
-#         edit.setMinimumWidth(300)
-
-#         hbox.addWidget(label)
-#         hbox.addWidget(edit)
-
-#         if browse:
-#             btn = QPushButton("📂")
-#             btn.setFixedWidth(40)
-
-#             def open_dialog():
-#                 if is_file:
-#                     path, _ = QFileDialog.getSaveFileName(self, "选择文件")
-#                 else:
-#                     path = QFileDialog.getExistingDirectory(self, "选择文件夹")
-#                 if path:
-#                     edit.setText(path)
-
-#             btn.clicked.connect(open_dialog)
-#             hbox.addWidget(btn)
-
-#         self.layout.addLayout(hbox)
-#         self.inputs[key_path] = edit
-
-#     def get_value_by_path(self, path):
-#         keys = path.split('.')
-#         value = self.config
-#         for k in keys:
-#             value = value[k]
-#         return value
-
-#     def set_value_by_path(self, path, new_value):
-#         keys = path.split('.')
-#         obj = self.config
-#         for k in keys[:-1]:
-#             obj = obj[k]
-#         obj[keys[-1]] = new_value
-
-#     def build_ui(self):
-#         self.add_row("模型名", "model_name")
-#         self.add_row("输入通道数", "in_channels")
-#         self.add_row("输出通道数", "out_channels")
-#         self.add_row("是否使用 AMP", "use_amp")
-#         self.add_row("训练图像路径", "train_img_dir", browse=True)
-#         self.add_row("训练掩码路径", "train_mask_dir", browse=True)
-#         self.add_row("学习率", "lr")
-#         self.add_row("训练轮数", "epochs")
-#         self.add_row("交叉熵损失", "loss.use_ce")
-#         self.add_row("Dice 损失", "loss.use_dice")
-
-#     def add_buttons(self):
-#         btn_layout = QHBoxLayout()
-
-#         save_btn = QPushButton("💾 保存配置")
-#         save_btn.clicked.connect(self.save_config)
-
-#         reload_btn = QPushButton("🔁 重新加载")
-#         reload_btn.clicked.connect(self.reload_config)
-
-#         btn_layout.addWidget(save_btn)
-#         btn_layout.addWidget(reload_btn)
-#         self.layout.addLayout(btn_layout)
-
-#     def save_config(self):
-#         for key_path, edit in self.inputs.items():
-#             raw = edit.text()
-#             try:
-#                 val = eval(raw, {}, {})
-#             except:
-#                 val = raw
-#             self.set_value_by_path(key_path, val)
-
-#         with open(self.config_path, "w", encoding="utf-8") as f:
-#             json.dump(self.config, f, indent=2, ensure_ascii=False)
-
-#         QMessageBox.information(self, "成功", "配置保存成功！")
-
-#     def reload_config(self):
-#         self.inputs.clear()
-#         self.load_config()
-#         QMessageBox.information(self, "重新加载", "配置已重新加载")
-
-
-
-# # ========================== 主界面 ==========================
-
-# class MainUI(QWidget):
-#     def __init__(self):
-#         super().__init__()
-#         self.setWindowTitle("工业视觉训练平台")
-#         self.resize(900, 650)
-
-#         self.layout = QVBoxLayout(self)
-
-#         # 三个主功能按钮
-#         self.btn_config = QPushButton("🧩 配置管理")
-#         self.btn_train = QPushButton("🧠 模型训练")
-#         self.btn_predict = QPushButton("📤 模型推理")
-
-#         for btn in [self.btn_config, self.btn_train, self.btn_predict]:
-#             btn.setFixedHeight(40)
-#             self.layout.addWidget(btn)
-
-#         # 页面切换容器
-#         self.stack = QStackedLayout()
-#         self.layout.addLayout(self.stack)
-
-#         # 每个页面内容
-#         self.page_config = ConfigEditor("config.json")
-
-#         self.page_train = QLabel("👉 这里是训练页面（TODO）")
-#         self.page_train.setAlignment(Qt.AlignCenter)
-
-#         self.page_predict = QLabel("👉 这里是推理页面（TODO）")
-#         self.page_predict.setAlignment(Qt.AlignCenter)
-
-#         # 添加页面
-#         self.stack.addWidget(self.page_config)
-#         self.stack.addWidget(self.page_train)
-#         self.stack.addWidget(self.page_predict)
-
-#         # 按钮绑定页面切换
-#         self.btn_config.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_config))
-#         self.btn_train.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_train))
-#         self.btn_predict.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_predict))
-
-
-# if __name__ == "__main__":
-#     app = QApplication(sys.argv)
-#     win = MainUI()
-#     win.show()
-#     sys.exit(app.exec_())   

@@ -10,8 +10,8 @@ with open("config.json", "r", encoding="utf-8") as f:
 from models.registry import get_model
 
 device = config["device"]
-model = get_model(config["model_name"], config["in_channels"], config["out_channels"]).to(device)
-model.load_state_dict(torch.load(os.path.join(config["save_dir"],config["save_filename"]), map_location=device))
+model = get_model(config["pretrain_model_name"], config["in_channels"], config["out_channels"]).to(device)
+model.load_state_dict(torch.load(os.path.join(config["pretrain_save_dir"],config["pretrain_save_filename"]), map_location=device))
 model.eval()
 
 input_h, input_w = config["input_size"]
@@ -19,8 +19,8 @@ stride_h, stride_w = input_h/2, input_w/2  # 滑动窗口步长
 
 def sliding_window_prediction(image: Image.Image):
     w, h = image.size
-    pad_w = (input_w - w % stride_w) % stride_w
-    pad_h = (input_h - h % stride_h) % stride_h
+    pad_w = int(input_w - w % stride_w) % stride_w
+    pad_h = int(input_h - h % stride_h) % stride_h
     image = TF.pad(image, [0, 0, pad_w, pad_h], fill=0)
 
     w_p, h_p = image.size
