@@ -225,19 +225,6 @@ class MainUI(QWidget):
                 QMessageBox.critical(None, "错误", f"运行失败：\n{e.stderr}")
             except FileNotFoundError:
                 QMessageBox.critical(None, "错误", "未找到 Python 可执行文件，请确认环境设置")
-        
-        # def run_preprocessing():
-        #     try:
-        #         # 路径根据实际放置的位置修改
-        #         result=subprocess.run(["python", "utils/split_labeled_dataset.py"], check=True,
-        #             stdout=subprocess.PIPE,
-        #             stderr=subprocess.PIPE,
-        #             text=True)
-        #         QMessageBox.information(self, "完成", f"处理输出：\n{result.stdout}")
-        #     except subprocess.CalledProcessError as e:
-        #         QMessageBox.critical(self, "错误", f"运行失败：\n{e}")
-        #     except FileNotFoundError:
-        #         QMessageBox.critical(self, "错误", "未找到 Python 可执行文件，请确认环境设置")
 
         run_btn.clicked.connect(run_preprocessing)
         layout.addWidget(config)
@@ -303,21 +290,8 @@ class MainUI(QWidget):
         def pretrain():
             try:
                 launch_python_script("pretrain.py")
-                # if platform.system() == "Windows":
-                #     subprocess.Popen(["start", "cmd", "/k", "python pretrain.py"], shell=True)
-                # else:
-                #     # Linux/macOS 示例，使用 gnome-terminal / bash
-                #     subprocess.Popen(["x-terminal-emulator", "-e", "python3 train.py"])
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
-        # def pretrain():
-        #     # 路径根据实际情况填写
-        #     try:
-        #         result = subprocess.run(["python", "pretrain.py"], check=True,
-        #             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        #         QMessageBox.information(self, "训练完成", result.stdout[-1000:])
-        #     except subprocess.CalledProcessError as e:
-        #         QMessageBox.critical(self, "训练失败", e.stderr)
         pretrain_btn.clicked.connect(pretrain)
 
         auto_annotate_btn = QPushButton("自动标注（TODO）")
@@ -326,14 +300,6 @@ class MainUI(QWidget):
                 launch_python_script("auto_annotate.py")
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
-        # def auto_annotate():
-        #     try:
-        #         if platform.system() == "Windows":
-        #             subprocess.Popen(["start", "cmd", "/k", "python auto_annotate.py"], shell=True)
-        #         else:
-        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 auto_annotate.py"])
-        #     except Exception as e:
-        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         auto_annotate_btn.clicked.connect(auto_annotate)
 
         # ======= 布局 =======
@@ -343,77 +309,6 @@ class MainUI(QWidget):
         layout.addWidget(auto_annotate_btn)
         layout.addStretch()
         return page
-
-
-#region
-    # def create_annotate_page(self):
-    #     page = QWidget()
-    #     layout = QVBoxLayout(page)
-
-    #     # ===== 图像路径输入区 =====
-    #     path_layout = QHBoxLayout()
-    #     label = QLabel("📂 原始图像路径：")
-    #     label.setFixedWidth(150)
-
-    #     with open("config.json", "r", encoding="utf-8") as f:
-    #         cfg = json.load(f)
-    #     default_path = cfg.get("annotate_img_dir", "")
-
-    #     self.annotate_img_input = QLineEdit(default_path)
-    #     self.annotate_img_input.setMinimumWidth(400)
-
-    #     browse_btn = QPushButton("📁 浏览")
-    #     def browse_folder():
-    #         folder = QFileDialog.getExistingDirectory(self, "选择图像文件夹")
-    #         if folder:
-    #             self.annotate_img_input.setText(folder)
-    #     browse_btn.clicked.connect(browse_folder)  
-
-    #     path_layout.addWidget(label)
-    #     path_layout.addWidget(self.annotate_img_input)
-    #     path_layout.addWidget(browse_btn)
-    #     layout.addLayout(path_layout)
-
-    #     # 保存路径按钮
-    #     save_btn = QPushButton("💾 保存路径到 config.json")
-    #     def save_path():
-    #         folder = self.annotate_img_input.text().strip()
-    #         if not folder:
-    #             QMessageBox.warning(self, "路径为空", "请输入或选择一个文件夹路径")
-    #             return
-    #         try:
-    #             with open("config.json", "r", encoding="utf-8") as f:
-    #                 cfg = json.load(f)
-    #             cfg["annotate_img_dir"] = folder
-    #             with open("config.json", "w", encoding="utf-8") as f:
-    #                 json.dump(cfg, f, indent=2, ensure_ascii=False)
-    #             QMessageBox.information(self, "成功", "路径已保存到 config.json")
-    #         except Exception as e:
-    #             QMessageBox.critical(self, "保存失败", str(e))
-    #     save_btn.clicked.connect(save_path)
-    #     layout.addWidget(save_btn)
-
-    #     # 启动标注按钮
-    #     start_btn = QPushButton("▶ 启动标注（打开 labelme）")
-    #     def start_labelme():
-    #         folder = self.annotate_img_input.text().strip()
-    #         if not folder:
-    #             QMessageBox.warning(self, "路径未填写", "请先选择原始图像路径")
-    #             return
-    #         try:
-    #             subprocess.Popen(["labelme", folder])
-    #         except FileNotFoundError:
-    #             QMessageBox.critical(self, "未找到 labelme", "请确保已安装 labelme 并添加到环境变量中。")
-                
-    #     pretrain_btn=QPushButton("自动标注模型训练")
-    #     auto_annotate_btn=QPushButton("自动标注（TODO）")
-    #     start_btn.clicked.connect(start_labelme)
-    #     layout.addWidget(start_btn)
-    #     layout.addWidget(pretrain_btn)
-    #     layout.addWidget(auto_annotate_btn)
-    #     layout.addStretch()
-    #     return page
-#endregion
 
     def create_train_page(self):
         page = QWidget()
@@ -480,35 +375,7 @@ class MainUI(QWidget):
                 launch_python_script("train.py")
             except Exception as e:
                 QMessageBox.critical(None,"Mistake",f"Fail to launch:{str(e)}")
-        # def run_in_cmd_window():
-        #     try:
-        #         if platform.system() == "Windows":
-        #             subprocess.Popen(["start", "cmd", "/k", "python train.py"], shell=True)
-        #         else:
-        #             # Linux/macOS 示例，使用 gnome-terminal / bash
-        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 train.py"])
-        #     except Exception as e:
-        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
-
         run_btn.clicked.connect(run_in_cmd_window)        
-        # def run_preprocessing():
-        #     try:
-        #         result = subprocess.run(
-        #             ["python", "train.py"],
-        #             check=True,
-        #             stdout=subprocess.PIPE,
-        #             stderr=subprocess.PIPE,
-        #             text=True
-        #         )
-        #         QMessageBox.information(None, "完成", f"输出：\n{result.stdout}")
-        #     except subprocess.CalledProcessError as e:
-        #         # 打印完整错误信息包括 stderr
-        #         QMessageBox.critical(None, "运行失败", f"错误代码：{e.returncode}\n\nstderr:\n{e.stderr}")
-        #     except FileNotFoundError:
-        #         QMessageBox.critical(None, "错误", "找不到 Python，请确认环境路径")
-
-        # run_btn.clicked.connect(run_preprocessing)        
-        layout.addWidget(config)
         layout.addWidget(run_btn)
         layout.addStretch()
         return page
@@ -530,15 +397,6 @@ class MainUI(QWidget):
                 launch_python_script("fine_tune.py")
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
-        # def run_finetune():
-        #     try:
-        #         if platform.system() == "Windows":
-        #             subprocess.Popen(["start", "cmd", "/k", "python fine_tune.py"], shell=True)
-        #         else:
-        #             # Linux/macOS 示例，使用 gnome-terminal / bash
-        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 finetune.py"])
-        #     except Exception as e:
-        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         run_btn.clicked.connect(run_finetune)
         layout.addWidget(config)
         layout.addWidget(run_btn)
@@ -557,15 +415,6 @@ class MainUI(QWidget):
                 launch_python_script("human_filter.py")
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
-        # def run_predict():
-        #     try:
-        #         if platform.system() == "Windows":
-        #             subprocess.Popen(["start", "cmd", "/k", "python human_filter.py"], shell=True)
-        #         else:
-        #             # Linux/macOS 示例，使用 gnome-terminal / bash
-        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 human_filter.py"])
-        #     except Exception as e:
-        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         run_btn.clicked.connect(run_predict)
         layout.addWidget(config)
         layout.addWidget(run_btn)
@@ -592,15 +441,6 @@ class MainUI(QWidget):
                 launch_python_script("tcp_server.py")
             except Exception as e:
                 QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
-        # def run_tcp_server():
-        #     try:
-        #         if platform.system() == "Windows":
-        #             subprocess.Popen(["start", "cmd", "/k", "python tcp_server.py"], shell=True)
-        #         else:
-        #             # Linux/macOS 示例，使用 gnome-terminal / bash
-        #             subprocess.Popen(["x-terminal-emulator", "-e", "python3 tcp_server.py"])
-        #     except Exception as e:
-        #         QMessageBox.critical(None, "错误", f"启动失败：{str(e)}")
         run_btn.clicked.connect(run_tcp_server)
         layout.addWidget(config)
         layout.addWidget(run_btn)

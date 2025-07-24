@@ -41,6 +41,9 @@
   "log_dir": "C:/Users/86178/Desktop/小可智能/项目/logs",
   "log_filename": "loss_log.csv",
   "val_vis_dir": "val_vis",
+
+
+
   "fine_tune_img_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/val/images",
   "fine_tune_mask_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/val/masks",
   "fine_tune_epochs": 10,
@@ -49,6 +52,7 @@
   "fine_tune_save_dir": "C:/Users/86178/Desktop/小可智能/输出结果",
   "fine_tune_save_filename": "fine_tuned_model.pth",
   "freeze_encoder": true,
+  "freeze_mode": "partial",
   "epochs": 2,
   "lr": 0.0001,
   "loss": {

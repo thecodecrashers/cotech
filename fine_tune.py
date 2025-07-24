@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print("设备:", device)
 
 # ==== 加载模型 ====
-model = get_model(config['model_name'], config['in_channels'], config['out_channels']).to(device)
+model = get_model(config['model_name'], config['in_channels'], config['out_channels'],config["freeze_mode"]).to(device)
 model.load_state_dict(torch.load(os.path.join(config["save_dir"], config["save_filename"]), map_location=device))
 
 # ==== 构建数据集 ====
@@ -22,7 +22,12 @@ finetune_dataset = SegmentationDataset(config['fine_tune_img_dir'], config['fine
 train_loader = DataLoader(finetune_dataset, batch_size=config['fine_tune_batch_size'], shuffle=True, drop_last=True)
 
 # ==== 优化器与损失函数 ====
-optimizer = torch.optim.Adam(model.parameters(), lr=config['fine_tune_lr'])
+# optimizer = torch.optim.Adam(model.parameters(), lr=config['fine_tune_lr'])
+optimizer = torch.optim.Adam(
+    filter(lambda p: p.requires_grad, model.parameters()),
+    lr=config['fine_tune_lr']
+)
+
 criterion = torch.nn.CrossEntropyLoss()
 
 # ==== 训练循环 ====

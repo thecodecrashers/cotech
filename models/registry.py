@@ -14,16 +14,16 @@ MODEL_REGISTRY = {
     "hrnetv2": HRNetV2  # ✅ 添加这一行
 }
 
-def get_model(name, in_channels=1, out_channels=1):
+def get_model(name, in_channels=1, out_channels=1,freeze_mode="none"):
     if name == "unet":
-        return UNet(in_channels=in_channels, out_channels=out_channels)
+        return UNet(in_channels=in_channels, out_channels=out_channels,freeze_mode=freeze_mode)
     elif name == "segformer":
-        return SegFormer(in_channels=in_channels, out_channels=out_channels)
+        return SegFormer(in_channels=in_channels, out_channels=out_channels,freeze_mode=freeze_mode)
     elif name == "deeplabv3":
-        return DeepLabV3(in_channels=in_channels, out_channels=out_channels)
+        return DeepLabV3(in_channels=in_channels, out_channels=out_channels,freeze_mode=freeze_mode)
     elif name == "unetpp":
-        return UNetPP(in_channels=in_channels, out_channels=out_channels)
+        return UNetPP(in_channels=in_channels, out_channels=out_channels,freeze_mode=freeze_mode)
     elif name=="hrnetv2":
-        return HRNetV2(in_channels=in_channels, out_channels=out_channels)
+        return HRNetV2(in_channels=in_channels, out_channels=out_channels,freeze_mode=freeze_mode)
     else:
         raise ValueError(f"Unknown model: {name}")
