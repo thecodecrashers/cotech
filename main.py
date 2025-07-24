@@ -5,7 +5,7 @@ import subprocess
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QFileDialog, QMessageBox,
-    QStackedLayout,QTextEdit
+    QStackedLayout,QTextEdit,QCheckBox,QComboBox,QSpinBox,QDoubleSpinBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QScrollArea
@@ -31,7 +31,6 @@ def launch_python_script(script_name: str):
         raise RuntimeError(f"❌ 脚本启动失败: {e}")
 
 # ========================== 共用配置小部件 ==========================
-
 class ConfigFragment(QWidget):
     def __init__(self, config_path, fields: list, label_map=None):
         super().__init__()
@@ -41,6 +40,7 @@ class ConfigFragment(QWidget):
         self.inputs = {}
         self.layout = QVBoxLayout(self)
         self.load_config()
+        self.rules = self.config.get("_ui_rules", {})
         self.build_ui()
         self.add_buttons()
 
@@ -68,19 +68,49 @@ class ConfigFragment(QWidget):
             label = QLabel(self.label_map.get(key, key))
             label.setFixedWidth(200)
 
+            rule = self.rules.get(key, {})
             value = self.get_value_by_path(key)
-            edit = QLineEdit(str(value))
-            edit.setMinimumWidth(300)
+            input_widget = None
 
-            if "dir" in key or "path" in key:
+            # === 下拉选项 ===
+            if rule.get("type") == "choice":
+                input_widget = QComboBox()
+                input_widget.addItems(rule.get("options", []))
+                if str(value) in rule.get("options", []):
+                    input_widget.setCurrentText(str(value))
+
+            # === 布尔 ===
+            elif rule.get("type") == "bool":
+                input_widget = QCheckBox()
+                input_widget.setChecked(bool(value))
+
+            # === 整数 ===
+            elif rule.get("type") == "int":
+                input_widget = QSpinBox()
+                input_widget.setRange(rule.get("min", 0), rule.get("max", 10000))
+                input_widget.setValue(int(value))
+
+            # === 浮点 ===
+            elif rule.get("type") == "float":
+                input_widget = QDoubleSpinBox()
+                input_widget.setRange(rule.get("min", 0.0), rule.get("max", 1.0))
+                input_widget.setSingleStep(rule.get("step", 0.0001))
+                input_widget.setDecimals(6)
+                input_widget.setValue(float(value))
+
+            # === 文件 / 文件夹 ===
+            elif rule.get("type") in ["file", "folder"] or "dir" in key or "path" in key:
+                input_widget = QLineEdit(str(value))
+                input_widget.setMinimumWidth(300)
                 btn = QPushButton("📂")
                 btn.setFixedWidth(40)
 
-                def make_open_dialog(edit_widget, field_key):
+                def make_open_dialog(edit_widget, r=rule, field_key=key):
                     def open_dialog():
                         try:
-                            if "path" in field_key:
-                                path, _ = QFileDialog.getSaveFileName(self, "选择文件", filter="所有文件 (*)")
+                            if r.get("type") == "file" or "path" in field_key:
+                                suffix = r.get("suffix", "*")
+                                path, _ = QFileDialog.getSaveFileName(self, "选择文件", filter=f"指定文件 (*{suffix})")
                             else:
                                 path = QFileDialog.getExistingDirectory(self, "选择文件夹")
                             if path:
@@ -89,17 +119,45 @@ class ConfigFragment(QWidget):
                             QMessageBox.critical(self, "打开失败", f"打开文件/文件夹失败：\n{str(e)}")
                     return open_dialog
 
-                btn.clicked.connect(make_open_dialog(edit, key))
-
+                btn.clicked.connect(make_open_dialog(input_widget))
                 hbox.addWidget(label)
-                hbox.addWidget(edit)
+                hbox.addWidget(input_widget)
                 hbox.addWidget(btn)
-            else:
-                hbox.addWidget(label)
-                hbox.addWidget(edit)
+                self.layout.addLayout(hbox)
+                self.inputs[key] = input_widget
+                continue  # 不再统一添加，已在上面处理
+            elif rule.get("type") == "int[]":
+                array_layout = QHBoxLayout()
+                len_required = rule.get("len", 2)
+                spin_boxes = []
 
+                try:
+                    arr_value = list(map(int, value))
+                except:
+                    arr_value = [0] * len_required
+
+                for i in range(len_required):
+                    spin = QSpinBox()
+                    spin.setRange(rule.get("min", 0), rule.get("max", 9999))
+                    spin.setValue(arr_value[i] if i < len(arr_value) else 0)
+                    spin_boxes.append(spin)
+                    array_layout.addWidget(spin)
+
+                container = QWidget()
+                container.setLayout(array_layout)
+                input_widget = container
+                input_widget._array_items = spin_boxes  # 自定义属性记录下来
+
+
+            # === 默认：文本输入 ===
+            else:
+                input_widget = QLineEdit(str(value))
+                input_widget.setMinimumWidth(300)
+
+            hbox.addWidget(label)
+            hbox.addWidget(input_widget)
             self.layout.addLayout(hbox)
-            self.inputs[key] = edit
+            self.inputs[key] = input_widget
 
     def add_buttons(self):
         hbox = QHBoxLayout()
@@ -109,19 +167,26 @@ class ConfigFragment(QWidget):
         self.layout.addLayout(hbox)
 
     def save_config(self):
-        for key, edit in self.inputs.items():
-            raw = edit.text()
+        for key, widget in self.inputs.items():
+            rule = self.rules.get(key, {})
             try:
-                val = eval(raw, {}, {})
+                if isinstance(widget, QComboBox):
+                    val = widget.currentText()
+                elif isinstance(widget, QCheckBox):
+                    val = widget.isChecked()
+                elif isinstance(widget, QSpinBox) or isinstance(widget, QDoubleSpinBox):
+                    val = widget.value()
+                else:  # QLineEdit fallback
+                    raw = widget.text()
+                    val = eval(raw, {}, {}) if rule.get("type") not in ["file", "folder"] else raw
             except:
-                val = raw
+                val = widget.text()
             self.set_value_by_path(key, val)
 
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self.config, f, indent=2, ensure_ascii=False)
 
         QMessageBox.information(self, "保存成功", "配置已保存到 config.json")
-
 
 # ========================== 主界面 ==========================
 
@@ -376,6 +441,7 @@ class MainUI(QWidget):
             except Exception as e:
                 QMessageBox.critical(None,"Mistake",f"Fail to launch:{str(e)}")
         run_btn.clicked.connect(run_in_cmd_window)        
+        layout.addWidget(config)
         layout.addWidget(run_btn)
         layout.addStretch()
         return page
