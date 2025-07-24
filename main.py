@@ -521,7 +521,8 @@ class MainUI(QWidget):
                                                        "fine_tune_epochs",
                                                        "fine_tune_lr",
                                                        "fine_tune_batch_size",
-                                                       "fine_tune_save_path",
+                                                       "fine_tune_save_dir",
+                                                       "fine_tune_save_filename",
                                                        "freeze_encoder"])
         run_btn = QPushButton("▶ 开始微调")
         def run_finetune():

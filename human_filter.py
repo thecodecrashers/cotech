@@ -26,7 +26,7 @@ input_size = config.get("input_size", (512, 512))
 
 # ======= 推理函数 =======
 def preprocess(img_path):
-    img = Image.open(img_path).convert("RGB")
+    img = Image.open(img_path).convert("L")
     orig = img.copy()
     img = img.resize(input_size, Image.BILINEAR)
     img_tensor = TF.to_tensor(img).unsqueeze(0).to(device)

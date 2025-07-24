@@ -4,29 +4,36 @@ from models.registry import get_model
 from utils.dataset import SegmentationDataset
 import json
 import os
+from tqdm import tqdm  # ✅ 加载进度条库
 
+# ==== 加载配置 ====
 with open('config.json', 'r', encoding='utf-8') as f:
     config = json.load(f)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print("设备:", device)
 
-# 1. 加载模型和预训练参数
+# ==== 加载模型 ====
 model = get_model(config['model_name'], config['in_channels'], config['out_channels']).to(device)
-model.load_state_dict(torch.load(os.path.join(config["save_dir"],config["save_filename"]), map_location=device))
+model.load_state_dict(torch.load(os.path.join(config["save_dir"], config["save_filename"]), map_location=device))
 
-# 2. 构建新数据的 DataLoader
+# ==== 构建数据集 ====
 finetune_dataset = SegmentationDataset(config['fine_tune_img_dir'], config['fine_tune_mask_dir'], augment=True)
 train_loader = DataLoader(finetune_dataset, batch_size=config['fine_tune_batch_size'], shuffle=True, drop_last=True)
 
-# 3. 优化器、损失
+# ==== 优化器与损失函数 ====
 optimizer = torch.optim.Adam(model.parameters(), lr=config['fine_tune_lr'])
 criterion = torch.nn.CrossEntropyLoss()
 
-# 4. 训练循环
+# ==== 训练循环 ====
 for epoch in range(config['fine_tune_epochs']):
     model.train()
-    running_loss = 0
-    for imgs, masks in train_loader:
+    running_loss = 0.0
+
+    # ✅ tqdm 包裹 train_loader，显示进度条
+    pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{config['fine_tune_epochs']}", unit="batch")
+
+    for imgs, masks in pbar:
         imgs, masks = imgs.to(device), masks.to(device)
         optimizer.zero_grad()
         outputs = model(imgs)
@@ -34,11 +41,17 @@ for epoch in range(config['fine_tune_epochs']):
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
-    print(f"Epoch [{epoch+1}/{config['fine_tune_epochs']}], Loss: {running_loss/len(train_loader):.4f}")
 
-# 5. 保存模型
+        # ✅ 实时更新 tqdm 显示当前 loss
+        pbar.set_postfix(loss=loss.item())
+
+    avg_loss = running_loss / len(train_loader)
+    print(f"✅ Epoch [{epoch+1}/{config['fine_tune_epochs']}], Avg Loss: {avg_loss:.4f}")
+
+# ==== 保存模型 ====
 torch.save(model.state_dict(), config['fine_tune_model_save_path'])
-print("Finetune done, model saved.")
+print("✅ Finetune done, model saved.")
+
 
 
 

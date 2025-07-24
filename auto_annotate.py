@@ -4,23 +4,27 @@ import torch
 import torchvision.transforms.functional as TF
 from tqdm import tqdm
 
+# ==== 加载配置 ====
 with open("config.json", "r", encoding="utf-8") as f:
     config = json.load(f)
 
 from models.registry import get_model
 
+# ==== 模型加载 ====
 device = config["device"]
 model = get_model(config["pretrain_model_name"], config["in_channels"], config["out_channels"]).to(device)
-model.load_state_dict(torch.load(os.path.join(config["pretrain_save_dir"],config["pretrain_save_filename"]), map_location=device))
+model.load_state_dict(torch.load(os.path.join(config["pretrain_save_dir"], config["pretrain_save_filename"]), map_location=device))
 model.eval()
 
+# ==== 输入尺寸和步长 ====
 input_h, input_w = config["input_size"]
-stride_h, stride_w = input_h/2, input_w/2  # 滑动窗口步长
+stride_h, stride_w = input_h // 2, input_w // 2  # 🧠 用整数除法
 
 def sliding_window_prediction(image: Image.Image):
     w, h = image.size
-    pad_w = int(input_w - w % stride_w) % stride_w
-    pad_h = int(input_h - h % stride_h) % stride_h
+    # 🛠️ 确保 pad_w / pad_h 是整数
+    pad_w = int((input_w - w % stride_w) % stride_w)
+    pad_h = int((input_h - h % stride_h) % stride_h)
     image = TF.pad(image, [0, 0, pad_w, pad_h], fill=0)
 
     w_p, h_p = image.size
@@ -32,13 +36,14 @@ def sliding_window_prediction(image: Image.Image):
             patch = image.crop((left, top, left + input_w, top + input_h))
             tensor = TF.to_tensor(patch).unsqueeze(0).to(device)
             with torch.no_grad():
-                pred = model(tensor)[0].argmax(0).cpu().numpy()
+                pred = model(tensor)[0].argmax(0).cpu().numpy().astype(np.uint16)
             mask_total[top:top+input_h, left:left+input_w] += pred
+
             count_map[top:top+input_h, left:left+input_w] += 1
 
-    count_map[count_map == 0] = 1
+    count_map[count_map == 0] = 1  # 防止除以0
     final_mask = (mask_total / count_map).astype(np.uint8)
-    return final_mask[:h, :w]  # 裁回原始尺寸
+    return final_mask[:h, :w]  # 裁回原图尺寸
 
 def mask_to_shapes(mask: np.ndarray, max_points=10):
     shapes = []
@@ -92,7 +97,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 

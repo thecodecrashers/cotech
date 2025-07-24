@@ -27,16 +27,6 @@ def make_dirs(base_dir):
         os.makedirs(os.path.join(base_dir, split, "images"), exist_ok=True)
         os.makedirs(os.path.join(base_dir, split, "masks"), exist_ok=True)
 
-
-# def load_labelme_json(json_path):
-#     with open(json_path, "r", encoding="utf-8") as f:
-#         data = json.load(f)
-#     w, h = data["imageWidth"], data["imageHeight"]
-#     mask = Image.new("L", (w, h), 0)
-#     draw = ImageDraw.Draw(mask)
-#     for shape in data["shapes"]:
-#         draw.polygon(shape["points"], fill=255)
-#     return mask
 def load_labelme_json(json_path):
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
