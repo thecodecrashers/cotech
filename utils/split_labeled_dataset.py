@@ -135,7 +135,7 @@ def main():
         for img_file in subset:
             process_sample(img_file, split)
 
-    print("✅ 数据增强与划分完成，保存在：", OUTPUT_DIR)
+    print(" 数据增强与划分完成，保存在：", OUTPUT_DIR)
 
 
 if __name__ == "__main__":

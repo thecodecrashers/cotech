@@ -25,6 +25,7 @@ def launch_python_script(script_name: str):
     try:
         if platform.system() == "Windows":
             subprocess.Popen(["start", "cmd", "/k", python_path, script_path], shell=True)
+            #subprocess.Popen(["start","cmd","/k",sys.executable,"-m","labelme"])
         else:
             subprocess.Popen(["x-terminal-emulator", "-e", python_path, script_path])
     except Exception as e:
@@ -176,11 +177,16 @@ class ConfigFragment(QWidget):
                     val = widget.isChecked()
                 elif isinstance(widget, QSpinBox) or isinstance(widget, QDoubleSpinBox):
                     val = widget.value()
-                else:  # QLineEdit fallback
+                elif isinstance(widget,QLineEdit):  # QLineEdit fallback
                     raw = widget.text()
                     val = eval(raw, {}, {}) if rule.get("type") not in ["file", "folder"] else raw
+                elif isinstance(widget, QWidget) and hasattr(widget, "_array_items"):
+                    val = [spin.value() for spin in widget._array_items]
+                else:
+                    raise TypeError(f"不受支持的控件类型")
             except:
-                val = widget.text()
+                #val = widget.text()
+                val=None
             self.set_value_by_path(key, val)
 
         with open(self.config_path, "w", encoding="utf-8") as f:
@@ -346,7 +352,10 @@ class MainUI(QWidget):
                 return
             try:
                 #subprocess.Popen(["labelme", folder])
-                subprocess.Popen(["python","run_labelme.py"],shell=True)
+                base_dir=os.path.dirname(os.path.abspath(__file__))
+                script_path=os.path.join(base_dir,"run_labelme.py")
+                subprocess.Popen([sys.executable,script_path],shell=True)
+                #subprocess.Popen(["python","run_labelme.py"],shell=True)
             except Exception as e:
                 QMessageBox.critical(self, "启动失败", str(e))
         start_labelme_btn.clicked.connect(start_labelme)

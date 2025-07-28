@@ -58,7 +58,7 @@ def mask_to_shapes(mask: np.ndarray, max_points=10):
                     cnt = cnt[idx]
                 points = [[float(x), float(y)] for x, y in cnt]
                 shapes.append({
-                    "label": "welding_point",
+                    "label": str(class_id),
                     "points": points,
                     "group_id": None,
                     "description": "",
@@ -77,7 +77,7 @@ def annotate_one(image_path: str):
         print(f"⚠️ 无有效轮廓: {base}")
         return
     data = {
-        "version": "5.0.1",
+        #"version": "5.0.1",
         "flags": {},
         "shapes": shapes,
         "imagePath": os.path.basename(image_path),

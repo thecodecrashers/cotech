@@ -1,49 +1,47 @@
 {
-  "pretrain_augment_times": 1,
+  "max_points": 10,
+  "pretrain_augment_times": 10,
   "pretrain_device": "cuda",
   "pretrain_model_name": "unet",
-  "pretrain_batch_size": 1,
+  "pretrain_batch_size": 8,
   "pretrain_lr": 0.0001,
   "pretrain_epochs": 10,
   "pretrain_warmup_factor": 0.1,
-  "pretrain_checkpoint_dir": "C:/Users/86178/Desktop/小可智能/输出结果",
+  "pretrain_checkpoint_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片",
   "pretrain_checkpoint_filename": "heckpoint.pth",
-  "pretrain_save_dir": "C:/Users/86178/Desktop/小可智能/输出结果",
+  "pretrain_save_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片",
   "pretrain_save_filename": "est_Unet.pth",
-  "preprocess_train_ratio": 0.1,
-  "preprocess_val_ratio": 0.1,
-  "preprocess_test_ratio": 0.8,
-  "preprocess_augment_times": 0,
+  "preprocess_train_ratio": 0.7,
+  "preprocess_val_ratio": 0.2,
+  "preprocess_test_ratio": 0.1,
+  "preprocess_augment_times": 10,
   "preprocess_include_original": true,
-  "annotate_dir": "C:/Users/86178/Desktop/小可智能/pictures",
+  "annotate_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/保存Pin裁剪图片",
   "model_name": "unet",
   "in_channels": 1,
   "out_channels": 2,
   "input_size": [
-    600,
-    600
+    120,
+    120
   ],
   "num_classes": 2,
-  "device": "cpu",
-  "batch_size": 1,
+  "device": "cuda",
+  "batch_size": 64,
   "accum_iter": 2,
   "use_amp": true,
-  "train_img_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/train/images",
-  "train_mask_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/train/masks",
-  "val_img_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/train/images",
-  "val_mask_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/train/masks",
-  "test_img_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/train/images",
-  "test_mask_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/train/masks",
-  "save_dir": "C:/Users/86178/Desktop/小可智能/输出结果",
+  "train_img_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/保存Pin裁剪图片/split_data/train/images",
+  "train_mask_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/保存Pin裁剪图片/split_data/train/masks",
+  "val_img_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/保存Pin裁剪图片/split_data/val/images",
+  "val_mask_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/保存Pin裁剪图片/split_data/val/masks",
+  "test_img_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/保存Pin裁剪图片/split_data/test/images",
+  "test_mask_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/保存Pin裁剪图片/split_data/test/masks",
+  "save_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片",
   "save_filename": "best_Unet.pth",
-  "checkpoint_dir": "C:/Users/86178/Desktop/小可智能/项目/checkpoint",
+  "checkpoint_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片",
   "checkpoint_filename": "checkpoint.pth",
-  "log_dir": "C:/Users/86178/Desktop/小可智能/项目/logs",
+  "log_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片",
   "log_filename": "loss_log.csv",
   "val_vis_dir": "val_vis",
-
-
-
   "fine_tune_img_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/val/images",
   "fine_tune_mask_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/val/masks",
   "fine_tune_epochs": 10,
@@ -53,7 +51,7 @@
   "fine_tune_save_filename": "fine_tuned_model.pth",
   "freeze_encoder": true,
   "freeze_mode": "partial",
-  "epochs": 2,
+  "epochs": 50,
   "lr": 0.0001,
   "loss": {
     "use_ce": true,
@@ -62,9 +60,9 @@
     "use_focal": false,
     "use_boundary": false
   },
-  "annotate_img_dir": "C:/Users/86178/Desktop/小可智能/pictures",
-  "human_filter_dir": "C:/Users/86178/Desktop/小可智能/pictures",
-  "hum_filter_bad_picture_dir": "C:/Users/86178/Desktop/小可智能/pictures/不好的图",
+  "annotate_img_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/保存Pin裁剪图片",
+  "human_filter_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/保存Pin裁剪图片",
+  "hum_filter_bad_picture_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/不好的图",
   "host": "0.0.0.0",
   "port": 5678,
   "max_threads": 4,
@@ -72,32 +70,41 @@
     "input_size": {
       "type": "int[]",
       "len": 2,
-      "min": 32,
+      "min": 16,
       "max": 2048
-    },    
+    },
     "num_classes": {
       "type": "int",
       "min": 1,
       "max": 100
     },
-  "pretrain_augment_times": {
+    "pretrain_augment_times": {
       "type": "int",
       "min": 0,
       "max": 100
     },
     "pretrain_device": {
       "type": "choice",
-      "options": ["cuda", "cpu"]
+      "options": [
+        "cuda",
+        "cpu"
+      ]
     },
     "pretrain_model_name": {
       "type": "choice",
-      "options": ["unet", "unetpp", "deeplabv3", "hrnetv2", "segformer"]
+      "options": [
+        "unet",
+        "unetpp",
+        "deeplabv3",
+        "hrnetv2",
+        "segformer"
+      ]
     },
     "pretrain_lr": {
       "type": "float",
-      "min": 1e-6,
+      "min": 1e-06,
       "max": 0.01,
-      "step": 1e-5
+      "step": 1e-05
     },
     "pretrain_batch_size": {
       "type": "int",
@@ -159,7 +166,13 @@
     },
     "model_name": {
       "type": "choice",
-      "options": ["unet", "unetpp", "deeplabv3", "hrnetv2", "segformer"]
+      "options": [
+        "unet",
+        "unetpp",
+        "deeplabv3",
+        "hrnetv2",
+        "segformer"
+      ]
     },
     "in_channels": {
       "type": "int",
@@ -173,7 +186,10 @@
     },
     "device": {
       "type": "choice",
-      "options": ["cuda", "cpu"]
+      "options": [
+        "cuda",
+        "cpu"
+      ]
     },
     "batch_size": {
       "type": "int",
@@ -188,11 +204,11 @@
     },
     "lr": {
       "type": "float",
-      "min": 1e-6,
+      "min": 1e-06,
       "max": 0.01,
-      "step": 1e-5
+      "step": 1e-05
     },
-    "accum_iter":{
+    "accum_iter": {
       "type": "int",
       "min": 1,
       "max": 64
@@ -213,9 +229,9 @@
     },
     "fine_tune_lr": {
       "type": "float",
-      "min": 1e-6,
+      "min": 1e-06,
       "max": 0.01,
-      "step": 1e-5
+      "step": 1e-05
     },
     "fine_tune_img_dir": {
       "type": "folder"
@@ -232,12 +248,16 @@
     },
     "freeze_mode": {
       "type": "choice",
-      "options": ["none", "partial", "full_backbone", "all"]
+      "options": [
+        "none",
+        "partial",
+        "full_backbone",
+        "all"
+      ]
     },
     "freeze_encoder": {
       "type": "bool"
     },
-  
     "annotate_img_dir": {
       "type": "folder"
     },
@@ -307,7 +327,5 @@
       "max": 16,
       "step": 1
     }
-    
   }
-  
 }

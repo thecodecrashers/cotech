@@ -67,13 +67,7 @@ class ResNetBackbone(nn.Module):
         return x
 
 class DeepLabV3(nn.Module):
-    """
-    DeepLabV3 支持 freeze_mode 微调方式：
-    - "none": 所有参数都训练
-    - "partial": 冻结前几层（stem + layer1 + layer2）
-    - "full_backbone": 冻结整个 ResNet backbone
-    - "all": 所有参数冻结（仅推理）
-    """
+
     def __init__(self, in_channels=1, out_channels=1, freeze_mode="none"):
         super().__init__()
         self.backbone = ResNetBackbone(in_channels)
