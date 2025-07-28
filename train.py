@@ -185,14 +185,13 @@ def train():
             n = len(val_loader)
             print(f"[Epoch {epoch+1}] Train Loss: {avg_train:.4f} | Val Loss: {avg_val:.4f}")
             print(f"📊 Pixel Acc: {acc_total/n:.4f} | mIoU: {miou_total/n:.4f}")
-
-            if avg_val < best_loss:
-                torch.save(model.state_dict(), os.path.join(config["save_dir"], config["save_filename"]))
-                best_loss = avg_val
-                print(f"✅ Best model updated: {os.path.join(config['save_dir'], config['save_filename'])}")
+            torch.save(model.state_dict(), os.path.join(config["save_dir"], config["save_filename"]))
+            best_loss = avg_val
+            print(f"✅ Best model updated: {os.path.join(config['save_dir'], config['save_filename'])}")
         else:
             print(f"[Epoch {epoch+1}] Train Loss: {avg_train:.4f}")
 
+        
         save_checkpoint(model, optimizer, epoch, best_loss, path=os.path.join(config["checkpoint_dir"], config["checkpoint_filename"]))
         append_loss_log(epoch, avg_train, path=os.path.join(config["log_dir"], config["log_filename"]), val_loss=avg_val)
 

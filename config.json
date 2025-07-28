@@ -42,15 +42,17 @@
   "log_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片",
   "log_filename": "loss_log.csv",
   "val_vis_dir": "val_vis",
-  "fine_tune_img_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/val/images",
-  "fine_tune_mask_dir": "C:/Users/86178/Desktop/小可智能/pictures/split_data/val/masks",
-  "fine_tune_epochs": 10,
+  "fine_tune_img_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/不好的图/split_data/train/images",
+  "fine_tune_mask_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/不好的图/split_data/train/masks",
+  "fine_tune_epochs": 20,
   "fine_tune_lr": 1e-05,
-  "fine_tune_batch_size": 4,
-  "fine_tune_save_dir": "C:/Users/86178/Desktop/小可智能/输出结果",
+  "fine_tune_batch_size": 8,
+  "fine_tune_model_name": "unet",
+  "fine_tune_original_model_dir":"C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片",
+  "fine_tune_original_model_filename":"best_Unet.pth",
+  "fine_tune_save_dir": "C:/Users/IPC-/Desktop/小可智能/保存Pin裁剪图片/微调结果输出",
   "fine_tune_save_filename": "fine_tuned_model.pth",
-  "freeze_encoder": true,
-  "freeze_mode": "partial",
+  "freeze_mode": "full_backbone",
   "epochs": 50,
   "lr": 0.0001,
   "loss": {
@@ -246,6 +248,23 @@
       "type": "file",
       "suffix": ".pth"
     },
+    "fine_tune_original_model_dir": {
+      "type": "folder"
+    },
+    "fine_tune_original_model_filename": {
+      "type": "file",
+      "suffix": ".pth"
+    },
+    "fine_tune_model_name": {
+      "type": "choice",
+      "options": [
+        "unet",
+        "unetpp",
+        "deeplabv3",
+        "hrnetv2",
+        "segformer"
+      ]
+    },
     "freeze_mode": {
       "type": "choice",
       "options": [
@@ -254,9 +273,6 @@
         "full_backbone",
         "all"
       ]
-    },
-    "freeze_encoder": {
-      "type": "bool"
     },
     "annotate_img_dir": {
       "type": "folder"

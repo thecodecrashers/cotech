@@ -1,28 +1,50 @@
+import os
+import json
 import torch
 from torch.utils.data import DataLoader
+from torch.cuda.amp import autocast, GradScaler
+from tqdm import tqdm
+
 from models.registry import get_model
 from utils.dataset import SegmentationDataset
-import json
-import os
-from tqdm import tqdm  # ✅ 加载进度条库
 
 # ==== 加载配置 ====
 with open('config.json', 'r', encoding='utf-8') as f:
     config = json.load(f)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print("设备:", device)
+print("✅ 使用设备:", device)
 
 # ==== 加载模型 ====
-model = get_model(config['model_name'], config['in_channels'], config['out_channels'],config["freeze_mode"]).to(device)
-model.load_state_dict(torch.load(os.path.join(config["save_dir"], config["save_filename"]), map_location=device))
+model = get_model(
+    config['model_name'],
+    config['in_channels'],
+    config['out_channels'],
+    config.get("freeze_mode", "none")
+).to(device)
+
+model.load_state_dict(torch.load(
+    os.path.join(config["save_dir"], config["save_filename"]),
+    map_location=device
+))
 
 # ==== 构建数据集 ====
-finetune_dataset = SegmentationDataset(config['fine_tune_img_dir'], config['fine_tune_mask_dir'], augment=True)
-train_loader = DataLoader(finetune_dataset, batch_size=config['fine_tune_batch_size'], shuffle=True, drop_last=True)
+finetune_dataset = SegmentationDataset(
+    config['fine_tune_img_dir'],
+    config['fine_tune_mask_dir'],
+    augment=False
+)
+
+train_loader = DataLoader(
+    finetune_dataset,
+    batch_size=config['fine_tune_batch_size'],
+    shuffle=True,
+    drop_last=False,
+    num_workers=4,
+    pin_memory=True
+)
 
 # ==== 优化器与损失函数 ====
-# optimizer = torch.optim.Adam(model.parameters(), lr=config['fine_tune_lr'])
 optimizer = torch.optim.Adam(
     filter(lambda p: p.requires_grad, model.parameters()),
     lr=config['fine_tune_lr']
@@ -30,32 +52,112 @@ optimizer = torch.optim.Adam(
 
 criterion = torch.nn.CrossEntropyLoss()
 
+# ==== AMP 和梯度累积 ====
+scaler = GradScaler()
+accum_steps = 2  # 梯度累积步数，设置为2表示每2个batch更新一次梯度
+
 # ==== 训练循环 ====
 for epoch in range(config['fine_tune_epochs']):
     model.train()
     running_loss = 0.0
 
-    # ✅ tqdm 包裹 train_loader，显示进度条
     pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{config['fine_tune_epochs']}", unit="batch")
+    optimizer.zero_grad()
 
-    for imgs, masks in pbar:
+    for step, (imgs, masks) in enumerate(pbar):
         imgs, masks = imgs.to(device), masks.to(device)
-        optimizer.zero_grad()
-        outputs = model(imgs)
-        loss = criterion(outputs, masks)
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item()
 
-        # ✅ 实时更新 tqdm 显示当前 loss
-        pbar.set_postfix(loss=loss.item())
+        with autocast():  # ✅ 混合精度 forward
+            outputs = model(imgs)
+            loss = criterion(outputs, masks) / accum_steps  # ✅ 梯度累积
+
+        scaler.scale(loss).backward()
+
+        # ✅ 梯度更新控制
+        if (step + 1) % accum_steps == 0 or (step + 1 == len(train_loader)):
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()
+
+        # ✅ tqdm 显示
+        running_loss += loss.item() * accum_steps  # 累积时除掉了，这里乘回来
+        pbar.set_postfix(loss=loss.item() * accum_steps)
 
     avg_loss = running_loss / len(train_loader)
-    print(f"✅ Epoch [{epoch+1}/{config['fine_tune_epochs']}], Avg Loss: {avg_loss:.4f}")
+    print(f"📘 Epoch [{epoch+1}/{config['fine_tune_epochs']}], Avg Loss: {avg_loss:.4f}")
 
 # ==== 保存模型 ====
 torch.save(model.state_dict(), config['fine_tune_model_save_path'])
-print("✅ Finetune done, model saved.")
+print("✅ 微调完成，模型已保存至:", config['fine_tune_model_save_path'])
+
+
+# import torch
+# from torch.utils.data import DataLoader
+# from models.registry import get_model
+# from utils.dataset import SegmentationDataset
+# import json
+# import os
+# from tqdm import tqdm  # ✅ 加载进度条库
+
+# # ==== 加载配置 ====
+# with open('config.json', 'r', encoding='utf-8') as f:
+#     config = json.load(f)
+
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# print("设备:", device)
+
+# # ==== 加载模型 ====
+# model = get_model(config['model_name'], config['in_channels'], config['out_channels'],config["freeze_mode"]).to(device)
+# model.load_state_dict(torch.load(os.path.join(config["save_dir"], config["save_filename"]), map_location=device))
+
+# # ==== 构建数据集 ====
+# finetune_dataset = SegmentationDataset(config['fine_tune_img_dir'], config['fine_tune_mask_dir'], augment=True)
+# #train_loader = DataLoader(finetune_dataset, batch_size=config['fine_tune_batch_size'], shuffle=True, drop_last=True)
+# train_loader = DataLoader(
+#     finetune_dataset,
+#     batch_size=config['fine_tune_batch_size'],
+#     shuffle=True,
+#     drop_last=False,
+#     num_workers=4,           # ✅ 多线程加速
+#     pin_memory=True          # ✅ 提升 GPU 传输效率
+# )
+
+
+# # ==== 优化器与损失函数 ====
+# # optimizer = torch.optim.Adam(model.parameters(), lr=config['fine_tune_lr'])
+# optimizer = torch.optim.Adam(
+#     filter(lambda p: p.requires_grad, model.parameters()),
+#     lr=config['fine_tune_lr']
+# )
+
+# criterion = torch.nn.CrossEntropyLoss()
+
+# # ==== 训练循环 ====
+# for epoch in range(config['fine_tune_epochs']):
+#     model.train()
+#     running_loss = 0.0
+
+#     # ✅ tqdm 包裹 train_loader，显示进度条
+#     pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{config['fine_tune_epochs']}", unit="batch")
+
+#     for imgs, masks in pbar:
+#         imgs, masks = imgs.to(device), masks.to(device)
+#         optimizer.zero_grad()
+#         outputs = model(imgs)
+#         loss = criterion(outputs, masks)
+#         loss.backward()
+#         optimizer.step()
+#         running_loss += loss.item()
+
+#         # ✅ 实时更新 tqdm 显示当前 loss
+#         pbar.set_postfix(loss=loss.item())
+
+#     avg_loss = running_loss / len(train_loader)
+#     print(f"✅ Epoch [{epoch+1}/{config['fine_tune_epochs']}], Avg Loss: {avg_loss:.4f}")
+
+# # ==== 保存模型 ====
+# torch.save(model.state_dict(), config['fine_tune_model_save_path'])
+# print("✅ Finetune done, model saved.")
 
 
 

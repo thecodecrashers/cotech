@@ -4,7 +4,7 @@ import json
 import random
 from PIL import Image, ImageDraw, ImageEnhance, ImageOps, ImageFilter
 import numpy as np
-
+import shutil
 # ---------- 读取配置 ----------
 with open("config.json", "r", encoding="utf-8") as f:
     cfg = json.load(f)
@@ -219,3 +219,9 @@ def train():
 if __name__ == "__main__":
     main_augment()   # ① 生成 / 划分 / 增强
     train()          # ② 训练（自动包含验证和测试）
+    if os.path.exists(OUTPUT_DIR):
+        try:
+            shutil.rmtree(OUTPUT_DIR)
+            print(f"🧹 训练完成，已删除临时增强数据文件夹: {OUTPUT_DIR}")
+        except Exception as e:
+            print(f"❌ 删除失败: {e}")

@@ -12,10 +12,6 @@ from PyQt5.QtWidgets import QScrollArea
 from PyQt5.QtCore import QProcess
 import platform
 def launch_python_script(script_name: str):
-    """
-    启动脚本：用当前 Python 解释器来执行 script_name 文件
-    会自动判断平台（Windows / Linux）
-    """
     python_path = sys.executable
     script_path = os.path.abspath(script_name)
 
@@ -311,10 +307,11 @@ class MainUI(QWidget):
         config = ConfigFragment(
             "config.json",
             fields=[
-                "annotate_img_dir",
+                "annotate_dir",
                 "pretrain_augment_times",
                 "pretrain_device",
                 "pretrain_model_name",
+                "input_size",
                 "pretrain_batch_size",
                 "pretrain_lr",
                 "pretrain_epochs",
@@ -322,11 +319,10 @@ class MainUI(QWidget):
                 "pretrain_checkpoint_dir",
                 "pretrain_checkpoint_filename",
                 "pretrain_save_dir",
-                "pretrain_save_filename",
-                "annotate_dir"
+                "pretrain_save_filename"
             ],
             label_map={
-                "annotate_img_dir":        "标注图像路径",
+                "annotate_dir":        "标注图像路径",
                 "pretrain_augment_times":  "增强次数",
                 "pretrain_device":         "训练设备",
                 "pretrain_model_name":     "模型名称",
@@ -351,11 +347,9 @@ class MainUI(QWidget):
                 QMessageBox.warning(self, "未填写路径", "请填写标注图像路径")
                 return
             try:
-                #subprocess.Popen(["labelme", folder])
                 base_dir=os.path.dirname(os.path.abspath(__file__))
                 script_path=os.path.join(base_dir,"run_labelme.py")
                 subprocess.Popen([sys.executable,script_path],shell=True)
-                #subprocess.Popen(["python","run_labelme.py"],shell=True)
             except Exception as e:
                 QMessageBox.critical(self, "启动失败", str(e))
         start_labelme_btn.clicked.connect(start_labelme)
@@ -458,14 +452,32 @@ class MainUI(QWidget):
     def create_finetune_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        config = ConfigFragment("config.json", fields=[  "fine_tune_img_dir",
+        config = ConfigFragment("config.json", fields=[ "fine_tune_img_dir",
                                                        "fine_tune_mask_dir",
                                                        "fine_tune_epochs",
                                                        "fine_tune_lr",
                                                        "fine_tune_batch_size",
+                                                       "fine_tune_model_name",
+                                                       "input_size",
+                                                       "fine_tune_original_model_dir",
+                                                       "fine_tune_original_model_filename",
                                                        "fine_tune_save_dir",
                                                        "fine_tune_save_filename",
-                                                       "freeze_encoder"])
+                                                       "freeze_mode"],
+                                label_map={
+                                                        "fine_tune_img_dir": "微调图像路径",
+                                                        "fine_tune_mask_dir": "微调掩码路径",
+                                                        "fine_tune_epochs": "微调轮数",
+                                                        "fine_tune_lr": "微调学习率",
+                                                        "fine_tune_batch_size": "微调批次大小",
+                                                        "fine_tune_model_name": "微调模型名称",
+                                                        "input_size": "输入图像大小",
+                                                        "fine_tune_original_model_dir": "原始模型路径",
+                                                        "fine_tune_original_model_filename": "原始模型文件名",
+                                                        "fine_tune_save_dir": "微调模型保存路径",
+                                                        "fine_tune_save_filename": "微调模型文件名",
+                                                        "freeze_mode": "冻结模式"
+                                })
         run_btn = QPushButton("▶ 开始微调")
         def run_finetune():
             try:
@@ -483,7 +495,11 @@ class MainUI(QWidget):
         layout = QVBoxLayout(page)
         config = ConfigFragment("config.json", fields=[
                                                         "human_filter_dir",
-                                                       "hum_filter_bad_picture_dir"])
+                                                       "hum_filter_bad_picture_dir"],
+                                                label_map={
+                                                        "human_filter_dir": "人工识别图像路径",
+                                                        "hum_filter_bad_picture_dir": "错误图像储存路径"
+                                                })
         run_btn = QPushButton("▶ 开始推理")
         def run_predict():
             try:
